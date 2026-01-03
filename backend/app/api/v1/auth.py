@@ -1,5 +1,7 @@
 from fastapi import APIRouter, HTTPException, status
 from app.schemas.auth import LoginRequest, LoginResponse, UserInfo
+from app.core.security import verify_password, create_access_token
+from app.core.config import settings
 
 router = APIRouter()
 
@@ -9,21 +11,19 @@ async def login(creds: LoginRequest):
     Endpoint: Logowanie Administratora
     Opis: Weryfikuje poświadczenia i zwraca token JWT.
     """
-    # Tutaj powinna znaleźć się logika weryfikacji hasła (np. hash)
-    if creds.username == "admin" and creds.password == "super_secret_password123":
-        # Mock odpowiedzi sukcesu [cite: 165-175]
-        return LoginResponse(
-            success=True,
-            access_token="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
-            expires_in=3600,
-            user=UserInfo(
-                id=1,
-                role="admin",
-                last_login="2024-11-27T09:15:00Z"
-            )
-        )
+    user = get_username_from_db(creds.username)  # Funkcja pobierająca nazwę użytkownika z bazy -> do napisania w w integracji z bazą
+    if not user or not verify_password(creds.password, user.hashed_password):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
     
-    raise HTTPException(
-        status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="Nieprawidłowy login lub hasło."
+    access_token = create_access_token(subject=creds.username)
+    
+    return LoginResponse(
+        success = True,
+        access_token = access_token,
+        expires_in = settings.ACCESS_TOKEN_EXPIRE_MINUTES,
+        user = UserInfo(
+            id = user.id,
+            role = user.role,
+            last_login = user.last_login
+        )
     )
