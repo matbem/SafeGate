@@ -1,6 +1,6 @@
 from datetime import datetime
 from typing import List, Dict
-from .image_facade import ImageProcessingFacade
+from .access_service import ImageProcessingFacade
 
 # from backend.app.db.repositories import EmployeeRepository
 

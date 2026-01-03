@@ -8,7 +8,6 @@ async def login(creds: LoginRequest):
     """
     Endpoint: Logowanie Administratora
     Opis: Weryfikuje poświadczenia i zwraca token JWT.
-    Zgodnie z dokumentacją: [cite: 158-164]
     """
     # Tutaj powinna znaleźć się logika weryfikacji hasła (np. hash)
     if creds.username == "admin" and creds.password == "super_secret_password123":
@@ -24,7 +23,6 @@ async def login(creds: LoginRequest):
             )
         )
     
-    # Obsługa błędu 401 [cite: 176-180]
     raise HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Nieprawidłowy login lub hasło."

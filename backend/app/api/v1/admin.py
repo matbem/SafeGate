@@ -23,7 +23,6 @@ async def add_users(payload: AddUserRequest):
     """
     Endpoint: Dodanie użytkownika (użytkowników)
     Opis: Backend przetwarza reference_photo na wektor.
-    Zgodnie z dokumentacją: [cite: 65-67]
     """
     # Logika przetwarzania listy użytkowników [cite: 71-84]
     return {
@@ -38,7 +37,6 @@ async def update_users(payload: UpdateUserListRequest):
     """
     Endpoint: Modyfikacja danych użytkowników
     Opis: Masowa aktualizacja rekordów.
-    Zgodnie z dokumentacją: [cite: 99-101]
     """
     return {
         "success": True,

@@ -1,6 +1,6 @@
 from datetime import datetime
 from typing import Dict, Any, Tuple
-from .image_facade import ImageProcessingFacade
+from .access_service import ImageProcessingFacade
 
 # Symulacja repozytoriów (w rzeczywistym kodzie zaimportuj je z folderu db)
 # from backend.app.db.repositories import AccessLogRepository, EmployeeRepository
@@ -106,3 +106,7 @@ class AccessService:
                 "face_encoding": [-0.1] * 128 
             }
         return None
+    
+
+async def get_access_service() -> AccessService:
+    return AccessService()
