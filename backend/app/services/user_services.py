@@ -73,6 +73,14 @@ class UserService:
             modified_count += 1
             
         return modified_count
+    
+    async def get_all_users(self) -> List[Dict]:
+        """
+        Pobiera wszystkich użytkowników z bazy.
+        """
+        #users = await self.employee_repo.get_all()
+        users = []  # Mock zwracany
+        return users
 
     async def prune_old_logs(self, cutoff_date: datetime):
         """
@@ -82,3 +90,11 @@ class UserService:
         # return await self.log_repo.delete_older_than(cutoff_date)
         print(f"Usuwanie logów starszych niż {cutoff_date}")
         return 100 # Zwraca liczbę usuniętych rekordów
+    
+    async def get_logs(self, since: str) -> list:
+        """
+        Pobiera logi od określonego znacznika czasu.
+        """
+        logs = EmployeeRepository.get_logs_since(since) # Przykładowa metoda repozytorium
+
+        return logs

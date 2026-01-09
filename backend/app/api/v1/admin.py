@@ -1,76 +1,125 @@
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Depends
 from app.schemas.admin import (
     AddUserRequest,
     UpdateUserListRequest,
     DeleteUserRequest,
-    PruneLogsRequest
+    PruneLogsRequest,
+    UserOperationsResponse,
+    GetLogsResponse,
+    PruneLogsResponse
 )
+from app.api.deps import get_user_service
+import datetime
 
 router = APIRouter()
 
-# --- Endpoints ---
+@router.get("/logs", response_model=GetLogsResponse)
+async def get_logs(timestamp: datetime = Query(..., description="Format ISO 8601"), user_service=Depends(get_user_service)):
+    """
+    Endpoint: Getting logs for admin panel
+    
+    Parameters:
+    - timestamp: str - ISO 8601 formatted timestamp to filter logs from that point onward
+    Returns:
+    - GetLogsResponse: response containing list of logs
 
-@router.get("/logs")
-async def get_logs(timestamp: str = Query(..., description="Format ISO 8601")):
     """
-    Endpoint: Pobranie logów
-    Zgodnie z dokumentacją: [cite: 62-64]
-    """
-    return {"message": f"Pobieranie logów od {timestamp}"}
+    logs = await user_service.get_logs(since=timestamp)
+    
+    if logs and isinstance(logs, list):
+        return GetLogsResponse(success=True, logs=logs)
+    return GetLogsResponse(success=False, logs=[])
 
-@router.post("/add_user", status_code=201)
-async def add_users(payload: AddUserRequest):
+@router.get("/users", response_model=UserOperationsResponse) #do we need this function?
+async def get_users(user_service=Depends(get_user_service)):
     """
-    Endpoint: Dodanie użytkownika (użytkowników)
-    Opis: Backend przetwarza reference_photo na wektor.
+    Endpoint: Getting all users for admin panel
+    Returns:
+    - UserOperationsResponse: response containing list of users
     """
-    # Logika przetwarzania listy użytkowników [cite: 71-84]
-    return {
-        "success": True,
-        "added_count": len(payload.users_list),
-        "errors": [],
-        "message": "Pomyślnie dodano użytkowników."
-    }
+    users = await user_service.get_all_users()
+    
+    if users and isinstance(users, list):
+        return UserOperationsResponse(success=True, added_modified_count=len(users))
+    return UserOperationsResponse(success=False, added_modified_count=0)
 
-@router.put("/users")
-async def update_users(payload: UpdateUserListRequest):
+@router.post("/add_user", status_code=201, response_model=UserOperationsResponse)
+async def add_users(payload: AddUserRequest, user_service=Depends(get_user_service)):
     """
-    Endpoint: Modyfikacja danych użytkowników
-    Opis: Masowa aktualizacja rekordów.
-    """
-    return {
-        "success": True,
-        "modified_count": len(payload.users_list),
-        "message": "Zaktualizowano dane użytkowników."
-    }
+   Endpint adding users for admin panel
 
-@router.delete("/users")
-async def delete_users(payload: DeleteUserRequest):
+   Parameters:
+    - payload: AddUserRequest - request body containing list of users to add
+    Returns:
+    - UserOperationsResponse: response indicating success/failure and details
     """
-    Endpoint: Usuwanie użytkowników
-    Opis: Trwałe usunięcie z bazy.
-    Zgodnie z dokumentacją: [cite: 118-120]
-    """
-    count = len(payload.ids_to_delete) + len(payload.tokens_to_delete)
-    return {
-        "success": True,
-        "deleted_count": count,
-        "message": "Użytkownicy zostali trwale usunięci z systemu."
-    }
+    
+    result = await user_service.create_users_bulk(payload.users_list)
+    
+    if result["errors"]:
+        raise HTTPException(status_code=400, detail=result["errors"])
+    
+    return UserOperationsResponse(
+        success=True,
+        added_modified_count=result["added_count"]
+    )
 
-@router.delete("/logs/prune")
-async def prune_logs(payload: PruneLogsRequest):
+@router.put("/users", status_code=200, response_model=UserOperationsResponse)
+async def update_users(payload: UpdateUserListRequest, user_service=Depends(get_user_service)):
     """
-    Endpoint: Czyszczenie archiwum logów
-    Opis: Usuwa logi starsze niż cutoff_date.
-    Zgodnie z dokumentacją: [cite: 132-134]
+    Endpoint: Group user data update
+    Parameters:
+    - payload: UpdateUserListRequest - request body containing list of user updates
+    Returns:
+    - UserOperationsResponse: response indicating success/failure and details
+
+    """
+
+    result = await user_service.update_users(payload.users_list)
+    if result["errors"]:
+        raise HTTPException(status_code=400, detail=result["errors"])
+    return UserOperationsResponse(
+        success=True,
+        added_modified_count=result["modified_count"]
+    )
+
+@router.delete("/users", status_code=200, response_model=UserOperationsResponse)
+async def delete_users(payload: DeleteUserRequest, user_service=Depends(get_user_service)):
+    """
+    Endpoint: Deleting users
+    Parameters:
+    - payload: DeleteUserRequest - request body containing list of user IDs to delete
+    Returns:
+    - UserOperationsResponse: response indicating success/failure and details
+    """
+    result = await user_service.delete_users(payload.ids_to_delete)
+
+    if result["errors"]:
+        raise HTTPException(status_code=400, detail=result["errors"])
+    return UserOperationsResponse(
+        success=True,
+        added_modified_count=result["deleted_count"]
+    )
+
+@router.delete("/logs/prune", status_code=200, response_model=PruneLogsResponse) #might to be changed after db repository implementation
+async def prune_logs(payload: PruneLogsRequest, user_service=Depends(get_user_service)):
+    """
+    Endpoint: Pruning old logs
+    Parameters:
+    - payload: PruneLogsRequest - request body containing cutoff date and confirmation
+    Returns:
+    - PruneLogsResponse: response indicating success/failure and details
     """
     if not payload.confirm:
         raise HTTPException(status_code=400, detail="Brak potwierdzenia 'confirm'")
-        
-    return {
-        "success": True,
-        "deleted_count": 850,
-        "message": f"Pomyślnie usunięto logi starsze niż {payload.cutoff_date}.",
-        "disk_space_freed_mb": 12.5
-    }
+    
+    result = await user_service.prune_old_logs(cutoff_date=datetime.datetime.fromisoformat(payload.cutoff_date))
+
+    if result["errors"] or not result:
+        raise HTTPException(status_code=500, detail="Błąd podczas czyszczenia logów.")
+    
+    return PruneLogsResponse(
+        success=True,
+        deleted_count=result["deleted_count"],
+        message=f"Usunięto {result['deleted_count']} logów starszych niż {payload.cutoff_date}."
+    )

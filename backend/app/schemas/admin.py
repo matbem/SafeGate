@@ -2,6 +2,7 @@ from pydantic import BaseModel
 from typing import List, Optional
 
 class UserData(BaseModel):
+    id: Optional[int] = None
     full_name: Optional[str] = None
     qr_token: Optional[str] = None
     qr_valid_until: Optional[str] = None
@@ -22,8 +23,22 @@ class UpdateUserListRequest(BaseModel):
 
 class DeleteUserRequest(BaseModel):
     ids_to_delete: List[int]
-    tokens_to_delete: List[str]
-
+    
 class PruneLogsRequest(BaseModel):
     cutoff_date: str
     confirm: bool
+
+class UserOperationsResponse(BaseModel):
+    success: bool
+    added_modified_count: int
+    #added_modified_ids: Optional[List[int]] = None
+    errors: Optional[List[str]] = None
+
+class GetLogsResponse(BaseModel):
+    success: bool
+    logs: List[dict]
+
+class PruneLogsResponse(BaseModel):
+    success: bool
+    deleted_count: int
+    message: str
