@@ -1,6 +1,7 @@
 from datetime import datetime
 from typing import Dict, Any, Tuple
 from .access_service import ImageProcessingFacade
+from db.repositories import AccessLogRepository, EmployeeRepository
 
 # Symulacja repozytoriów (w rzeczywistym kodzie zaimportuj je z folderu db)
 # from backend.app.db.repositories import AccessLogRepository, EmployeeRepository
