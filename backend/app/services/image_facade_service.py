@@ -1,72 +1,56 @@
 import base64
 import cv2
 import numpy as np
-import face_recognition
-from typing import Optional, List, Any
+from app.core.biometrics import BiometricsCore
+from loguru import logger
 
 class ImageProcessingFacade:
     """
-    Realizacja wzorca Facade.
-    Hermetyzuje złożoność bibliotek OpenCV i dlib/face_recognition.
+    Facade for image processing tasks.
     """
 
-    @staticmethod
-    def decode_base64_to_image(base64_string: str) -> np.ndarray:
+    def __init__(self):
+        self.biometrics_core = BiometricsCore()
+
+    def decode_base64_image(self, image_base64: str) -> np.ndarray:
         """
-        Konwertuje ciąg Base64 na obraz w formacie OpenCV (BGR).
-        Zgodne z wymaganiem konwersji klatki[cite: 17].
+        Decodes a base64 encoded image to a numpy array (RGB).
+        """
+        logger.debug("Decoding base64 image")
+
+        if ',' in image_base64:
+            image_base64 = image_base64.split(',')[1]
+        np_arr = np.frombuffer(base64.b64decode(image_base64), np.uint8)
+        img = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
+        return cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+    
+    def process_verification_request(self, image_base64: str, known_encoding: list) -> Touple:
+        """
+        Orchestrates the image processing for verification.
         """
         try:
-            # Usuń nagłówek 'data:image/jpeg;base64,' jeśli istnieje
-            if ',' in base64_string:
-                base64_string = base64_string.split(',')[1]
+
+            logger.debug("Processing verification request")
+
+            img = self.decode_base64_image(image_base64)
+
+            quality_result = self.biometrics_core.check_image_quality(img)
+            if not quality_result['valid']:
+                return {"success": False, "status": "POOR_QUALITY", "error_message": quality_result['error_message']}
             
-            image_data = base64.b64decode(base64_string)
-            nparr = np.frombuffer(image_data, np.uint8)
-            img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+            liveness_result = self.biometrics_core.detect_liveness(img)
+            if not liveness_result['valid']:
+                return {"success": False, "status": "LIVENESS_FAILED", "error_message": liveness_result['error_message']}
             
-            if img is None:
-                raise ValueError("Nie udało się zdekodować obrazu")
+            live_encoding = self.biometrics_core.generate_face_encoding(img)
+            if live_encoding is None:
+                return {"success": False, "status": "NO_FACE", "error_message": "No face detected in the image."}
             
-            # face_recognition wymaga RGB, OpenCV używa BGR
-            return cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+            match = self.biometrics_core.verify_face(known_encoding, live_encoding)
+            if match['is_match']:
+                return {"success": True, "status": "VERIFIED", "confidence_score": match['confidence_score']}
+            else:
+                return {"success": False, "status": "NOT_MATCHED", "confidence_score": match['confidence_score']}
+        
         except Exception as e:
-            raise ValueError(f"Błąd przetwarzania obrazu: {str(e)}")
-
-    @staticmethod
-    def detect_face_locations(image_rgb: np.ndarray) -> List:
-        """
-        Wykrywa lokalizację twarzy na obrazie.
-        Potrzebne do sprawdzenia warunku 'Brak twarzy'.
-        """
-        return face_recognition.face_locations(image_rgb)
-
-    @staticmethod
-    def generate_face_encoding(image_rgb: np.ndarray) -> Optional[List[float]]:
-        """
-        Tworzy wektor cech biometrycznych (128 liczb).
-        Wykorzystywane do zapisu w bazie (Employees.face_encoding)[cite: 13].
-        """
-        locations = face_recognition.face_locations(image_rgb)
-        if not locations:
-            return None
-        
-        # Pobierz pierwszy znaleziony wektor (zakładamy jedną osobę przy wejściu)
-        encodings = face_recognition.face_encodings(image_rgb, locations)
-        if encodings:
-            return encodings[0].tolist() # Konwersja numpy array na listę dla JSON
-        return None
-
-    @staticmethod
-    def compare_faces(known_encoding: List[float], unknown_encoding: List[float], tolerance: float = 0.6) -> float:
-        """
-        Porównuje dwa wektory twarzy.
-        Zwraca dystans (im mniejszy, tym większe podobieństwo).
-        Realizuje logikę silnika biometrycznego[cite: 32].
-        """
-        known_np = np.array(known_encoding)
-        unknown_np = np.array(unknown_encoding)
-        
-        # Obliczenie dystansu euklidesowego
-        distance = face_recognition.face_distance([known_np], unknown_np)[0]
-        return distance
+            return {"success": False, "status": "ERROR", "error_message": str(e)}

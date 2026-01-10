@@ -1,6 +1,7 @@
 from datetime import datetime
 from typing import List, Dict
 from .access_service import ImageProcessingFacade
+from loguru import logger
 
 # from backend.app.db.repositories import EmployeeRepository
 
@@ -19,6 +20,7 @@ class UserService:
         Dodaje użytkowników. Przetwarza 'reference_photo_base64' na 'face_encoding'.
         Zgodnie z dokumentacją: Backend automatycznie przetwarza zdjęcie.
         """
+        logger.info(f"Creating {len(users_data)} users in bulk.")
         processed_users = []
         errors = []
 
@@ -57,8 +59,8 @@ class UserService:
     async def update_users(self, updates: List[Dict]):
         """
         Aktualizacja danych. Jeśli przesłano nowe zdjęcie, przelicz wektor.
-        [cite: 108] - Aktualizacja wzorca twarzy wymusza przeliczenie face_encoding.
         """
+        logger.info(f"Updating {len(updates)} users.")
         modified_count = 0
         
         for update in updates:
@@ -78,6 +80,7 @@ class UserService:
         """
         Pobiera wszystkich użytkowników z bazy.
         """
+        logger.info("Fetching all users from the database.")
         #users = await self.employee_repo.get_all()
         users = []  # Mock zwracany
         return users
@@ -87,14 +90,15 @@ class UserService:
         Usuwa logi starsze niż data graniczna.
         Zgodne z polityką retencji danych.
         """
+        logger.info(f"Pruning logs older than {cutoff_date}.")
         # return await self.log_repo.delete_older_than(cutoff_date)
-        print(f"Usuwanie logów starszych niż {cutoff_date}")
         return 100 # Zwraca liczbę usuniętych rekordów
     
     async def get_logs(self, since: str) -> list:
         """
         Pobiera logi od określonego znacznika czasu.
         """
+        logger.info(f"Fetching logs since {since}.")
         logs = EmployeeRepository.get_logs_since(since) # Przykładowa metoda repozytorium
 
         return logs
