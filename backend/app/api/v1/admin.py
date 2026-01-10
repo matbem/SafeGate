@@ -1,0 +1,125 @@
+from fastapi import APIRouter, HTTPException, Query, Depends
+from app.schemas.admin import (
+    AddUserRequest,
+    UpdateUserListRequest,
+    DeleteUserRequest,
+    PruneLogsRequest,
+    UserOperationsResponse,
+    GetLogsResponse,
+    PruneLogsResponse
+)
+from app.api.deps import get_user_service
+import datetime
+
+router = APIRouter()
+
+@router.get("/logs", response_model=GetLogsResponse)
+async def get_logs(timestamp: datetime = Query(..., description="Format ISO 8601"), user_service=Depends(get_user_service)):
+    """
+    Endpoint: Getting logs for admin panel
+    
+    Parameters:
+    - timestamp: str - ISO 8601 formatted timestamp to filter logs from that point onward
+    Returns:
+    - GetLogsResponse: response containing list of logs
+
+    """
+    logs = await user_service.get_logs(since=timestamp)
+    
+    if logs and isinstance(logs, list):
+        return GetLogsResponse(success=True, logs=logs)
+    return GetLogsResponse(success=False, logs=[])
+
+@router.get("/users", response_model=UserOperationsResponse) #do we need this function?
+async def get_users(user_service=Depends(get_user_service)):
+    """
+    Endpoint: Getting all users for admin panel
+    Returns:
+    - UserOperationsResponse: response containing list of users
+    """
+    users = await user_service.get_all_users()
+    
+    if users and isinstance(users, list):
+        return UserOperationsResponse(success=True, added_modified_count=len(users))
+    return UserOperationsResponse(success=False, added_modified_count=0)
+
+@router.post("/add_user", status_code=201, response_model=UserOperationsResponse)
+async def add_users(payload: AddUserRequest, user_service=Depends(get_user_service)):
+    """
+   Endpint adding users for admin panel
+
+   Parameters:
+    - payload: AddUserRequest - request body containing list of users to add
+    Returns:
+    - UserOperationsResponse: response indicating success/failure and details
+    """
+    
+    result = await user_service.create_users_bulk(payload.users_list)
+    
+    if result["errors"]:
+        raise HTTPException(status_code=400, detail=result["errors"])
+    
+    return UserOperationsResponse(
+        success=True,
+        added_modified_count=result["added_count"]
+    )
+
+@router.put("/users", status_code=200, response_model=UserOperationsResponse)
+async def update_users(payload: UpdateUserListRequest, user_service=Depends(get_user_service)):
+    """
+    Endpoint: Group user data update
+    Parameters:
+    - payload: UpdateUserListRequest - request body containing list of user updates
+    Returns:
+    - UserOperationsResponse: response indicating success/failure and details
+
+    """
+
+    result = await user_service.update_users(payload.users_list)
+    if result["errors"]:
+        raise HTTPException(status_code=400, detail=result["errors"])
+    return UserOperationsResponse(
+        success=True,
+        added_modified_count=result["modified_count"]
+    )
+
+@router.delete("/users", status_code=200, response_model=UserOperationsResponse)
+async def delete_users(payload: DeleteUserRequest, user_service=Depends(get_user_service)):
+    """
+    Endpoint: Deleting users
+    Parameters:
+    - payload: DeleteUserRequest - request body containing list of user IDs to delete
+    Returns:
+    - UserOperationsResponse: response indicating success/failure and details
+    """
+    result = await user_service.delete_users(payload.ids_to_delete)
+
+    if result["errors"]:
+        raise HTTPException(status_code=400, detail=result["errors"])
+    return UserOperationsResponse(
+        success=True,
+        added_modified_count=result["deleted_count"]
+    )
+
+@router.delete("/logs/prune", status_code=200, response_model=PruneLogsResponse) #might to be changed after db repository implementation
+async def prune_logs(payload: PruneLogsRequest, user_service=Depends(get_user_service)):
+    """
+    Endpoint: Pruning old logs
+    Parameters:
+    - payload: PruneLogsRequest - request body containing cutoff date and confirmation
+    Returns:
+    - PruneLogsResponse: response indicating success/failure and details
+    """
+    if not payload.confirm:
+        raise HTTPException(status_code=400, detail="Brak potwierdzenia 'confirm'")
+    
+    result = await user_service.prune_old_logs(cutoff_date=datetime.datetime.fromisoformat(payload.cutoff_date))
+
+    if result["errors"] or not result:
+        raise HTTPException(status_code=500, detail="Błąd podczas czyszczenia logów.")
+    
+    return PruneLogsResponse(
+        success=True,
+        deleted_count=result["deleted_count"],
+        message=f"Usunięto {result['deleted_count']} logów starszych niż {payload.cutoff_date}."
+    )
