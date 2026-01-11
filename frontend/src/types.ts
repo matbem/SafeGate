@@ -37,3 +37,7 @@ export interface GetLogsResponse {
   success: boolean;
   logs: LogEntry[];
 }
+export interface LoginRequest {
+  username: string;
+  password: string;
+}

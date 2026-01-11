@@ -26,6 +26,7 @@ class AccessService:
         Returns:
         - Dict with access decision and details
         """
+
         logger.info(f"Verifying access for QR Token: {qr_token}")
         
         # Etap 1: Weryfikacja QR (Fail-Fast) 

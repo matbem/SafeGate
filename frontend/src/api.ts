@@ -1,40 +1,37 @@
 import axios from 'axios';
-import type {
-  VerifyRequest,
-  VerifyResponse,
-  UserData,
-  UserOperationsResponse,
-  GetLogsResponse
-} from './types';
+import type {VerifyRequest, VerifyResponse} from './types';
 
-const API_URL = 'http://localhost:8000';
+
+// Definiujemy dwa osobne adresy dla różnych portów backendu
+const ACCESS_API_URL = 'http://localhost:8000'; // Port dla Kiosku (Access)
+const ADMIN_API_URL = 'http://localhost:8001';  // Port dla Admina (Admin/Auth)
 
 export const api = {
-  // Weryfikacja (Bramka)
+  // Funkcja dla Kiosku - używa portu 8000
   verifyAccess: async (data: VerifyRequest): Promise<VerifyResponse> => {
-    const response = await axios.post<VerifyResponse>(`${API_URL}/api/v1/verify`, data);
+    try {
+      const response = await axios.post<VerifyResponse>(
+        `${ACCESS_API_URL}/api/v1/access/verify`, // Użycie ACCESS_API_URL
+        data
+      );
+      return response.data;
+    } catch (error: any) {
+      if (error.response && error.response.data) {
+        return error.response.data as VerifyResponse;
+      }
+      throw new Error('Błąd komunikacji z serwerem dostępu');
+    }
+  },
+
+  // NOWE: Funkcje dla Admina - używają portu 8001
+  adminLogin: async (credentials: any) => {
+    const response = await axios.post(`${ADMIN_API_URL}/api/v1/auth/login`, credentials);
     return response.data;
   },
 
-  // Logi (Admin)
-  getLogs: async (sinceTimestamp: string): Promise<GetLogsResponse> => {
-    const response = await axios.get<GetLogsResponse>(`${API_URL}/api/v1/logs`, {
-      params: { timestamp: sinceTimestamp }
-    });
-    return response.data;
-  },
-
-  // Zarządzanie użytkownikami (Admin)
-  addUser: async (users: UserData[]): Promise<UserOperationsResponse> => {
-    const response = await axios.post<UserOperationsResponse>(`${API_URL}/api/v1/add_user`, {
-      users_list: users
-    });
-    return response.data;
-  },
-
-  deleteUsers: async (ids: number[]): Promise<UserOperationsResponse> => {
-    const response = await axios.delete<UserOperationsResponse>(`${API_URL}/api/v1/users`, {
-      data: { ids_to_delete: ids }
+  getUsers: async (token: string) => {
+    const response = await axios.get(`${ADMIN_API_URL}/api/v1/admin/users`, {
+      headers: { Authorization: `Bearer ${token}` }
     });
     return response.data;
   }
