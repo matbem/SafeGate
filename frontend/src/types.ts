@@ -13,19 +13,28 @@ export interface VerifyResponse {
   door_unlock_duration_ms?: number;
   error_code?: string;
 }
-
-export interface LoginResponse {
-  access_token: string;
-  token_type: string;
+export interface UserInfo {
+  id: number;
+  role: string;
+  last_login: string;
 }
-
 export interface User {
   id: number;
   email: string;
   full_name?: string;
   is_active: boolean;
-  is_superuser: boolean;
+  is_superuser: boolean
 }
+
+
+export interface LoginResponse {
+  success: boolean;
+  access_token: string;
+  token_type: string;
+  expires_in: number;
+  user: UserInfo;
+}
+
 
 export interface AccessLog {
   id: number;
