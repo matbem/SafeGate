@@ -1,0 +1,13 @@
+fastapi
+uvicorn
+python-multipart
+opencv-python-headless
+numpy
+face-recognition
+python-jose[cryptography]
+passlib[bcrypt]
+pydantic
+loguru
+asyncpg
+sqlalchemy
+git+https://github.com/ageitgey/face_recognition_models

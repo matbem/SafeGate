@@ -1,6 +1,6 @@
 from fastapi import APIRouter, HTTPException
 from app.schemas.access import AccessVerifyRequest, AccessVerifyResponse
-from services.access_service import get_access_service, AccessService
+from app.services.access_service import get_access_service, AccessService
 
 router = APIRouter()
 

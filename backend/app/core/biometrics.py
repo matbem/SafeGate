@@ -2,7 +2,7 @@ import cv2
 import numpy as np
 import face_recognition
 from typing import Optional, List, Dict, Any
-from config import settings
+from app.core.config import settings
 from loguru import logger
 
 class BiometricsCore:

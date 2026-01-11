@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Dict, Any, Optional, Tuple
-from .access_service import ImageProcessingFacade
-from db.repositories import AccessLogRepository, EmployeeRepository
+from app.services.image_facade_service import ImageProcessingFacade
+from app.db.repositories import LogRepository, EmployeeRepository
 from loguru import logger
 
 # Symulacja repozytoriów (w rzeczywistym kodzie zaimportuj je z folderu db)
@@ -14,7 +14,7 @@ class AccessService:
     
     def __init__(self):
         self.image_processor = ImageProcessingFacade()
-        # self.log_repo = AccessLogRepository()  # Dependency Injection
+        # self.log_repo = LogRepository()  # Dependency Injection
         # self.employee_repo = EmployeeRepository()
 
     async def verify_entrance(self, qr_token: str, image_base64: str) -> Dict[str, Any]:
