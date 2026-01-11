@@ -21,3 +21,4 @@ app.add_middleware(
 app.include_router(access.router, prefix="/api/v1/access", tags=["Access"])
 app.include_router(admin.router, prefix="/api/v1/admin", tags=["Admin"])
 app.include_router(auth.router, prefix="/api/v1/auth", tags=["Auth"])
+
