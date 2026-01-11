@@ -1,3 +1,5 @@
+// frontend/src/types.ts
+
 export interface VerifyRequest {
   qr_token: string;
   image_base64: string;
@@ -12,32 +14,25 @@ export interface VerifyResponse {
   error_code?: string;
 }
 
-export interface UserData {
-  id?: number;
+export interface LoginResponse {
+  access_token: string;
+  token_type: string;
+}
+
+export interface User {
+  id: number;
+  email: string;
   full_name?: string;
-  qr_token?: string;
-  qr_valid_until?: string;
-  reference_photo_base64?: string;
+  is_active: boolean;
+  is_superuser: boolean;
 }
 
-export interface UserOperationsResponse {
-  success: boolean;
-  added_modified_count: number;
-  errors?: string[];
-}
-
-export interface LogEntry {
+export interface AccessLog {
+  id: number;
   timestamp: string;
-  user_id?: string;
+  user_id?: number;
   access_granted: boolean;
-  message?: string;
-}
-
-export interface GetLogsResponse {
-  success: boolean;
-  logs: LogEntry[];
-}
-export interface LoginRequest {
-  username: string;
-  password: string;
+  verification_method: string;
+  confidence_score?: number;
+  image_path?: string;
 }
