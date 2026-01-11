@@ -9,9 +9,9 @@ services:
       - postgres_data:/var/lib/postgresql/data
       - ./backend/app/db/init.sql:/docker-entrypoint-initdb.d/init.sql
     environment:
-      POSTGRES_USER=postgres
-      POSTGRES_PASSWORD=yourpassword
-      POSTGRES_DB=safegate
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=yourpassword
+      - POSTGRES_DB=safegate
     networks:
       - safegate-network
 
@@ -24,14 +24,14 @@ services:
     depends_on:
       - db
     environment:
-      - DATABASE_URL=postgresql+asyncpg://postgres:postgres@db:5432/safegate
+      - DATABASE_URL=postgresql+asyncpg://postgres:yourpassword@db:5432/safegate
     networks:
-        - safegate-network
+      - safegate-network
 
   frontend:
     build: ./frontend
     ports:
-    - "3000:3000"
+      - "3000:3000"
     volumes:
       - ./frontend:/app
     depends_on:
