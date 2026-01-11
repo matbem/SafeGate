@@ -34,3 +34,9 @@ __pycache__/
 *.py[cod]
 *$py.class
 
+#UV local files
+uv.lock
+pyproject.toml
+.python-version
+
+
