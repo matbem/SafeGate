@@ -1,4 +1,3 @@
-# backend/app/db/repositories/employee_repo.py
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import Optional, Dict, List, Any

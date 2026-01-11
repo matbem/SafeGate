@@ -10,6 +10,8 @@ from app.schemas.admin import (
 )
 from app.api.deps import get_user_service
 import datetime
+from typing import List
+from app.schemas.access import AccessLogRead
 
 router = APIRouter()
 
@@ -123,3 +125,11 @@ async def prune_logs(payload: PruneLogsRequest, user_service=Depends(get_user_se
         deleted_count=result["deleted_count"],
         message=f"Usunięto {result['deleted_count']} logów starszych niż {payload.cutoff_date}."
     )
+
+@router.get("/employees/{employee_id}/history", response_model=List[AccessLogRead])
+async def get_employee_access_history(
+    employee_id: int,
+    limit: int = 10,
+    access_service: AccessService = Depends(get_access_service)
+):
+    return await access_service.get_history(employee_id, limit)

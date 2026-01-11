@@ -99,3 +99,9 @@ class AccessService:
                 "face_encoding": [-0.1] * 128 
             }
         return None
+    
+    sync def get_history(self, employee_id: int, limit: int = 10):
+        """ 
+        Fetches access history for a given employee.
+        """
+        return await self.log_repo.get_employee_history(employee_id, limit)

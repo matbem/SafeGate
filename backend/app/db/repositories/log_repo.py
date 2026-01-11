@@ -1,4 +1,3 @@
-# backend/app/db/repositories/log_repo.py
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import Optional
@@ -24,3 +23,17 @@ class LogRepository:
             "ip": ip
         })
         await self.session.commit()
+    
+    async def get_employee_history(self, employee_id: int, limit: int = 10) -> List[Dict[str, Any]]:
+        """
+        Fetches access log history for a given employee.
+        """
+    query = text("""
+        SELECT timestamp, status, confidence, device_ip 
+        FROM access_logs 
+        WHERE employee_id = :emp_id 
+        ORDER BY timestamp DESC 
+        LIMIT :limit
+    """)
+    result = await self.session.execute(query, {"emp_id": employee_id, "limit": limit})
+    return [dict(row._mapping) for row in result.fetchall()]
