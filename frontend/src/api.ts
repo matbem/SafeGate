@@ -1,24 +1,32 @@
+// frontend/src/api.ts
 import axios from 'axios';
 import {
   type VerifyRequest,
   type VerifyResponse,
   type LoginResponse,
-  type User,
-  type AccessLog
+  type Employee,
+  type AccessLog,
+  type GetUsersResponse,
+  type GetLogsResponse,
+  type UserOperationsResponse,
+  type PruneLogsResponse,
+  type AddUserRequest,
+  type UpdateUserListRequest,
+  type DeleteUserRequest,
+  type PruneLogsRequest
 } from './types';
 
-// Adres API (zakładamy, że backend działa na porcie 8000)
-const API_URL = 'http://localhost:8000/api/v1';
+// Address of the backend API
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api/v1';
 
-// Konfiguracja klienta axios
 const apiClient = axios.create({
   baseURL: API_URL,
   headers: {
-    'Content-Type': 'application/json', // Domyślnie wysyłamy JSON
+    'Content-Type': 'application/json',
   },
 });
 
-// Interceptor: Automatyczne dodawanie tokena do zapytań (jeśli jesteśmy zalogowani)
+// Interceptor to add JWT token
 apiClient.interceptors.request.use((config) => {
   const token = localStorage.getItem('token');
   if (token) {
@@ -28,50 +36,80 @@ apiClient.interceptors.request.use((config) => {
 }, (error) => Promise.reject(error));
 
 export const api = {
-  // --- KIOSK (Dla zwykłego użytkownika) ---
+  // --- KIOSK ---
   verifyAccess: async (data: VerifyRequest): Promise<VerifyResponse> => {
     try {
       const response = await apiClient.post<VerifyResponse>('/access/verify', data);
       return response.data;
     } catch (error: any) {
-      // Jeśli serwer zwróci błąd (np. 403 - Odmowa), i tak chcemy go obsłużyć w UI
-      if (error.response && error.response.data) {
+      if (error.response?.data) {
         return error.response.data as VerifyResponse;
       }
-      throw new Error('Błąd komunikacji z serwerem dostępu');
+      throw error;
     }
   },
 
-  // --- ADMIN (Logowanie i Zarządzanie) ---
-
-  // Logowanie: Teraz wysyła JSON {username, password}
+  // --- AUTH ---
   login: async (username: string, password: string): Promise<LoginResponse> => {
-    const payload = {
-      username: username,
-      password: password
-    };
-
-    // WAŻNE: Upewnij się, że w backendzie masz endpoint '/auth/login' obsługujący JSON!
-    // Jeśli backend używa standardowego OAuth2 ('/login/access-token'), to wymagałby FormData.
+    const payload = { username, password };
     const response = await apiClient.post<LoginResponse>('/auth/login', payload);
     return response.data;
   },
 
-  // Pobieranie logów wejść
-  getLogs: async (): Promise<AccessLog[]> => {
-    const response = await apiClient.get<AccessLog[]>('/admin/logs');
+  // --- ADMIN: USERS (Employees) ---
+  
+  // GET /users
+  getUsers: async (): Promise<Employee[]> => {
+    const response = await apiClient.get<GetUsersResponse>('/admin/users');
+    return response.data.users || [];
+  },
+
+  // POST /add_user
+  addUsers: async (users: Partial<Employee>[]): Promise<UserOperationsResponse> => {
+    const payload: AddUserRequest = { users_list: users };
+    const response = await apiClient.post<UserOperationsResponse>('/admin/add_user', payload);
     return response.data;
   },
 
-  // Pobieranie listy użytkowników
-  getUsers: async (): Promise<User[]> => {
-    const response = await apiClient.get<User[]>('/admin/users');
+  // PUT /users
+  updateUsers: async (users: Partial<Employee>[]): Promise<UserOperationsResponse> => {
+    const payload: UpdateUserListRequest = { users_list: users };
+    const response = await apiClient.put<UserOperationsResponse>('/admin/users', payload);
     return response.data;
   },
 
-  // (Opcjonalnie) Tworzenie nowego użytkownika
-  createUser: async (userData: Partial<User> & { password: string }): Promise<User> => {
-    const response = await apiClient.post<User>('/admin/users', userData);
+  // DELETE /users
+  deleteUsers: async (ids: number[]): Promise<UserOperationsResponse> => {
+    const payload: DeleteUserRequest = { ids_to_delete: ids };
+    // Axios DELETE with body requires the 'data' property
+    const response = await apiClient.delete<UserOperationsResponse>('/admin/users', { data: payload });
+    return response.data;
+  },
+
+  // GET /employees/{id}/history
+  getEmployeeHistory: async (employeeId: number, limit: number = 10): Promise<AccessLog[]> => {
+    const response = await apiClient.get<AccessLog[]>(`/admin/employees/${employeeId}/history`, {
+      params: { limit }
+    });
+    return response.data;
+  },
+
+  // --- ADMIN: LOGS ---
+
+  // GET /logs
+  getLogs: async (timestamp?: string): Promise<AccessLog[]> => {
+    // Default to fetch logs from epoch if no date provided, or handled by backend
+    const since = timestamp || new Date(0).toISOString();
+    const response = await apiClient.get<GetLogsResponse>('/admin/logs', {
+      params: { timestamp: since }
+    });
+    return response.data.logs || [];
+  },
+
+  // DELETE /logs/prune
+  pruneLogs: async (cutoffDate: string): Promise<PruneLogsResponse> => {
+    const payload: PruneLogsRequest = { cutoff_date: cutoffDate, confirm: true };
+    const response = await apiClient.delete<PruneLogsResponse>('/admin/logs/prune', { data: payload });
     return response.data;
   }
 };

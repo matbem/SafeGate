@@ -1,7 +1,7 @@
 from datetime import datetime, timedelta, timezone
 from typing import Optional, Union, Any
 
-from fastapi import Depends, HttpException, status
+from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from jose import JWTError, jwt
 from passlib.context import CryptContext
@@ -45,7 +45,7 @@ def get_current_token_payload(token: str = Depends(oauth2_scheme)) -> str:
     If invalid, raises 401 Unauthorized.
     """
 
-    credentials_exception = HttpException(
+    credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Could not validate credentials",
         headers={"WWW-Authenticate: Bearer"},

@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
 from app.schemas.access import AccessVerifyRequest, AccessVerifyResponse
 from app.services.access_service import AccessService
 from app.api.deps import get_access_service

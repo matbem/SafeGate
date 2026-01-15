@@ -8,8 +8,7 @@ router = APIRouter()
 @router.post("/login", response_model=LoginResponse)
 async def login(creds: LoginRequest):
     """
-    Endpoint: Logowanie Administratora
-    Opis: Weryfikuje poświadczenia i zwraca token JWT.
+    Endpoint: Admin login
     """
     user = get_username_from_db(creds.username)  # Funkcja pobierająca nazwę użytkownika z bazy -> do napisania w w integracji z bazą
     if not user or not verify_password(creds.password, user.hashed_password):

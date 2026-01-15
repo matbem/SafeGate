@@ -98,7 +98,7 @@ async def get_employee_access_history(
     return await access_service.get_history(employee_id, limit)
 
 @router.get("/logs", response_model=GetLogsResponse)
-async def get_logs(timestamp: datetime = Query(..., description="Format ISO 8601"), user_service=Depends(get_user_service)):
+async def get_logs(timestamp: datetime.datetime = Query(..., description="Format ISO 8601"), user_service=Depends(get_user_service)):
     """
     Endpoint: Getting logs for admin panel
     

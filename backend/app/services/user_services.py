@@ -4,8 +4,8 @@ from typing import List, Dict, Any
 from .access_service import ImageProcessingFacade
 from loguru import logger
 
-from backend.app.db.repositories.employee_repo import EmployeeRepository
-from backend.app.db.repositories.log_repo import LogRepository
+from app.db.repositories.employee_repo import EmployeeRepository
+from app.db.repositories.log_repo import LogRepository
 
 class UserService:
     """

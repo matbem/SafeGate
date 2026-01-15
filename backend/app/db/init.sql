@@ -22,3 +22,4 @@ CREATE TABLE access_logs (
     confidence FLOAT,
     device_ip INET
 );
+

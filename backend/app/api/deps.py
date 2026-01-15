@@ -1,5 +1,5 @@
 from fastapi import Depends
-from sql.alchemy.ext.asyncio import AsyncSession
+from sqlalchemy.ext.asyncio import AsyncSession
 from app.db.session import get_db
 from app.services.user_services import UserService
 from app.services.access_service import AccessService

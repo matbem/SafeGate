@@ -1,5 +1,21 @@
 // frontend/src/types.ts
 
+// --- Auth & Generic ---
+export interface LoginResponse {
+  success: boolean;
+  access_token: string;
+  token_type: string;
+  expires_in: number;
+  user: UserInfo;
+}
+
+export interface UserInfo {
+  id: number;
+  role: string;
+  last_login: string;
+}
+
+// --- Kiosk / Verification ---
 export interface VerifyRequest {
   qr_token: string;
   image_base64: string;
@@ -13,35 +29,68 @@ export interface VerifyResponse {
   door_unlock_duration_ms?: number;
   error_code?: string;
 }
-export interface UserInfo {
+
+// --- Admin: Employees (Users) ---
+// Matches backend 'Employee' model and 'GetUsersResponse'
+export interface Employee {
   id: number;
-  role: string;
-  last_login: string;
-}
-export interface User {
-  id: number;
-  email: string;
-  full_name?: string;
-  is_active: boolean;
-  is_superuser: boolean
+  full_name: string;
+  qr_token: string;
+  qr_valid_until: string;
+  reference_photo_base64?: string;
+  created_at?: string;
 }
 
-
-export interface LoginResponse {
+// Responses
+export interface GetUsersResponse {
   success: boolean;
-  access_token: string;
-  token_type: string;
-  expires_in: number;
-  user: UserInfo;
+  users: Employee[];
+  count: number;
 }
 
+export interface UserOperationsResponse {
+  success: boolean;
+  added_modified_count: number;
+  errors?: string[];
+}
 
+// Requests
+export interface AddUserRequest {
+  users_list: Partial<Employee>[];
+}
+
+export interface UpdateUserListRequest {
+  users_list: Partial<Employee>[];
+}
+
+export interface DeleteUserRequest {
+  ids_to_delete: number[];
+}
+
+// --- Admin: Logs ---
+// Matches backend 'AccessLog' and 'GetLogsResponse'
 export interface AccessLog {
-  id: number;
+  log_id: number;
   timestamp: string;
-  user_id?: number;
-  access_granted: boolean;
-  verification_method: string;
-  confidence_score?: number;
-  image_path?: string;
+  status: string;
+  confidence?: number;
+  device_ip?: string;
+  employee_id?: number;
+  full_name?: string; // Joined from employees table
+}
+
+export interface GetLogsResponse {
+  success: boolean;
+  logs: AccessLog[];
+}
+
+export interface PruneLogsRequest {
+  cutoff_date: string;
+  confirm: boolean;
+}
+
+export interface PruneLogsResponse {
+  success: boolean;
+  deleted_count: number;
+  message: string;
 }
