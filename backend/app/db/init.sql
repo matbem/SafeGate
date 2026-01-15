@@ -23,3 +23,15 @@ CREATE TABLE access_logs (
     device_ip INET
 );
 
+CREATE TABLE admins (
+    id INT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    username TEXT NOT NULL UNIQUE,
+    hashed_password TEXT NOT NULL,
+    role TEXT DEFAULT 'admin',
+    last_login TIMESTAMPTZ,
+    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+)
+
+INSERT INTO admins (username, hashed_password) VALUES
+('admin', '$2b$12$KIXQJYp7G8b6v1u5Z1GfUuJ8hFz8eW8jFz8eW8jFz8eW8jFz8eW8jFz'); -- Password is 'adminpass'
+

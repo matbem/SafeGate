@@ -33,3 +33,13 @@ class AccessLog(Base):
     status = Column(Enum(AccessStatus), nullable=False)
     confidence = Column(Float)
     device_ip = Column(INET)
+
+class Admin(Base):
+    __tablename__ = "admins"
+
+    id = Column(Integer, primary_key=True)
+    username = Column(String, unique=True, nullable=False)
+    hashed_password = Column(String, nullable=False)
+    role = Column(String, default="admin")
+    last_login = Column(DateTime(timezone=True))
+    created_at = Column(DateTime(timezone=True))

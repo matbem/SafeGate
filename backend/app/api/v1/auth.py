@@ -1,18 +1,27 @@
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, HTTPException, status, Depends
 from app.schemas.auth import LoginRequest, LoginResponse, UserInfo
 from app.core.security import verify_password, create_access_token
 from app.core.config import settings
+from app.api.deps import get_admin_repository
+from app.db.repositories.admin_repo import AdminRepository
 
 router = APIRouter()
 
 @router.post("/login", response_model=LoginResponse)
-async def login(creds: LoginRequest):
+async def login(
+    creds: LoginRequest,
+    admin_repo: AdminRepository = Depends(get_admin_repository)
+    ):
     """
     Endpoint: Admin login
     """
-    user = get_username_from_db(creds.username)  # Funkcja pobierająca nazwę użytkownika z bazy -> do napisania w w integracji z bazą
+    user = await admin_repo.get_by_username(creds.username)
     if not user or not verify_password(creds.password, user.hashed_password):
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid credentials")
+    
+    await admin_repo.update_last_login(user.id)
     
     access_token = create_access_token(subject=creds.username)
     
