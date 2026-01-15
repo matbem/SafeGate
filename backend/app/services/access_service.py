@@ -1,11 +1,9 @@
 from datetime import datetime
 from typing import Dict, Any, Optional, Tuple
 from app.services.image_facade_service import ImageProcessingFacade
-from app.db.repositories import LogRepository, EmployeeRepository
+from app.db.repositories.log_repo import LogRepository
+from app.db.repositories.employee_repo import EmployeeRepository
 from loguru import logger
-
-# Symulacja repozytoriów (w rzeczywistym kodzie zaimportuj je z folderu db)
-#from backend.app.db.repositories import AccessLogRepository, EmployeeRepository
 
 class AccessService:
     """
@@ -14,8 +12,8 @@ class AccessService:
     
     def __init__(self):
         self.image_processor = ImageProcessingFacade()
-        # self.log_repo = LogRepository()  # Dependency Injection
-        # self.employee_repo = EmployeeRepository()
+        self.log_repo = LogRepository()  # Dependency Injection
+        self.employee_repo = EmployeeRepository()
 
     async def verify_entrance(self, qr_token: str, image_base64: str) -> Dict[str, Any]:
         """
@@ -30,10 +28,10 @@ class AccessService:
         logger.info(f"Verifying access for QR Token: {qr_token}")
         
         # Etap 1: Weryfikacja QR (Fail-Fast) 
-        # user = await self.employee_repo.get_by_qr(qr_token)
+        user = await self.employee_repo.get_by_qr(qr_token)
         
         # MOCK danych użytkownika na potrzeby przykładu
-        user = self._mock_get_user_by_token(qr_token)
+        # user = self._mock_get_user_by_token(qr_token)
         logger.debug(f"User fetched from DB: {user}")
 
         if not user:
@@ -101,7 +99,7 @@ class AccessService:
             }
         return None
     
-    sync def get_history(self, employee_id: int, limit: int = 10):
+    async def get_history(self, employee_id: int, limit: int = 10):
         """ 
         Fetches access history for a given employee.
         """

@@ -3,6 +3,7 @@ import cv2
 import numpy as np
 from app.core.biometrics import BiometricsCore
 from loguru import logger
+from typing import Tuple
 
 class ImageProcessingFacade:
     """
@@ -24,7 +25,7 @@ class ImageProcessingFacade:
         img = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
         return cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
     
-    def process_verification_request(self, image_base64: str, known_encoding: list) -> Touple:
+    def process_verification_request(self, image_base64: str, known_encoding: list) -> Tuple:
         """
         Orchestrates the image processing for verification.
         """

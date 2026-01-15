@@ -1,6 +1,6 @@
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
-from typing import Optional
+from typing import Optional, Dict, List, Any
 
 class LogRepository:
     def __init__(self, session: AsyncSession):
@@ -28,12 +28,12 @@ class LogRepository:
         """
         Fetches access log history for a given employee.
         """
-    query = text("""
-        SELECT timestamp, status, confidence, device_ip 
-        FROM access_logs 
-        WHERE employee_id = :emp_id 
-        ORDER BY timestamp DESC 
-        LIMIT :limit
-    """)
-    result = await self.session.execute(query, {"emp_id": employee_id, "limit": limit})
-    return [dict(row._mapping) for row in result.fetchall()]
+        query = text("""
+            SELECT timestamp, status, confidence, device_ip 
+            FROM access_logs 
+            WHERE employee_id = :emp_id 
+            ORDER BY timestamp DESC 
+            LIMIT :limit
+        """)
+        result = await self.session.execute(query, {"emp_id": employee_id, "limit": limit})
+        return [dict(row._mapping) for row in result.fetchall()]
