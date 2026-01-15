@@ -30,8 +30,8 @@ CREATE TABLE admins (
     role TEXT DEFAULT 'admin',
     last_login TIMESTAMPTZ,
     created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
-)
+);
 
 INSERT INTO admins (username, hashed_password) VALUES
-('admin', '$2b$12$KIXQJYp7G8b6v1u5Z1GfUuJ8hFz8eW8jFz8eW8jFz8eW8jFz8eW8jFz'); -- Password is 'adminpass'
+('admin', '$2b$12$nTdR4lRvtq61hGWiD2PGX.hX81MroW3vP397P/z2Yc4NN56.VqS2O'); -- Password is 'admin'
 

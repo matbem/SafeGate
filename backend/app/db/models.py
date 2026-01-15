@@ -1,6 +1,7 @@
-from sqlalchemy import Column, Integer, String, DateTime, Float, Enum, ForeignKey, Vector
+from sqlalchemy import Column, Integer, String, DateTime, Float, Enum, ForeignKey
 from sqlalchemy.dialects.postgresql import UUID, INET
 from sqlalchemy.orm import declarative_base
+from pgvector.sqlalchemy import Vector
 import enum
 
 Base = declarative_base()

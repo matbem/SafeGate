@@ -32,6 +32,6 @@ async def login(
         user = UserInfo(
             id = user.id,
             role = user.role,
-            last_login = user.last_login
+            last_login = str(user.last_login) if user.last_login else None
         )
     )

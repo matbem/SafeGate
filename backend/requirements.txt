@@ -5,9 +5,11 @@ opencv-python-headless
 numpy
 face-recognition
 python-jose[cryptography]
-passlib[bcrypt]
+passlib
+bcrypt==3.2.2
 pydantic
 loguru
 asyncpg
 sqlalchemy
+pgvector
 git+https://github.com/ageitgey/face_recognition_models

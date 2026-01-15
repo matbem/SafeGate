@@ -10,7 +10,7 @@ class LoginRequest(BaseModel):
 class UserInfo(BaseModel):
     id: int
     role: str
-    last_login: str
+    last_login: Optional[str] = None
 
 class LoginResponse(BaseModel):
     success: bool

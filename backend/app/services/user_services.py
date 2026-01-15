@@ -31,7 +31,7 @@ class UserService:
             try:
                 encoding = None
                 if user.get("reference_photo_base64"):
-                    img = self.image_processor.decode_base64_to_image(user["reference_photo_base64"])
+                    img = self.image_processor.decode_base64_image(user["reference_photo_base64"])
                     encoding = self.image_processor.generate_face_encoding(img)
                     
                     if not encoding:
@@ -89,7 +89,7 @@ class UserService:
                 if "qr_valid_until" in update:
                     repo_update_data["qr_valid_until"] = update["qr_valid_until"]
                 if "reference_photo_base64" in update and update["reference_photo_base64"]:
-                    img = self.image_processor.decode_base64_to_image(update["reference_photo_base64"])
+                    img = self.image_processor.decode_base64_image(update["reference_photo_base64"])
                     encoding = self.image_processor.generate_face_encoding(img)
                     if encoding:
                         repo_update_data["face_encoding"] = encoding
