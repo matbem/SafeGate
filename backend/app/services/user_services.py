@@ -1,4 +1,5 @@
-from datetime import datetime
+import uuid
+from datetime import datetime, timedelta
 from typing import List, Dict, Any
 from .access_service import ImageProcessingFacade
 from loguru import logger
@@ -19,8 +20,8 @@ class UserService:
 
     async def create_users_bulk(self, users_data: List[Dict]):
         """
-        Dodaje użytkowników. Przetwarza 'reference_photo_base64' na 'face_encoding'.
-        Zgodnie z dokumentacją: Backend automatycznie przetwarza zdjęcie.
+        Creates users in bulk. 
+        Automatically generates a UUID for 'qr_token' if it is missing.
         """
         logger.info(f"Creating {len(users_data)} users in bulk.")
         processed_users = []
@@ -30,7 +31,6 @@ class UserService:
             try:
                 encoding = None
                 if user.get("reference_photo_base64"):
-                    # Konwersja zdjęcia referencyjnego na wektor
                     img = self.image_processor.decode_base64_to_image(user["reference_photo_base64"])
                     encoding = self.image_processor.generate_face_encoding(img)
                     
@@ -38,12 +38,19 @@ class UserService:
                         errors.append(f"Użytkownik {user.get('full_name')}: Nie znaleziono twarzy na zdjęciu.")
                         continue
                 
-                # Przygotowanie obiektu do zapisu w bazie
+                qr_token = user.get("qr_token")
+                if not qr_token or not qr_token.strip():
+                    qr_token = str(uuid.uuid4())
+
+                vali_until = user.get("qr_valid_until")
+                if not vali_until:
+                    valid_until = (datetime.now() + timedelta(days=360)).isoformat()
+
                 new_user = {
                     "full_name": user["full_name"],
-                    "qr_token": user.get("qr_token") or "auto-generated-uuid", # [cite: 74]
-                    "qr_valid_until": user["qr_valid_until"],
-                    "face_encoding": encoding, # Zapisujemy wektor, nie JPG [cite: 13]
+                    "qr_token": qr_token,
+                    "qr_valid_until": valid_until,
+                    "face_encoding": encoding,
                     "reference_photo": user.get("reference_photo_base64") # Opcjonalnie do podglądu
                 }
 
@@ -51,7 +58,8 @@ class UserService:
                 processed_users.append(new_user)
                 
             except Exception as e:
-                errors.append(f"Błąd przy użytkowniku {user.get('full_name')}: {str(e)}")
+                logger.error(f"Error creating user {user.get('full_name')}: {str(e)}")
+                errors.append(f"Error creating user {user.get('full_name')}: {str(e)}")
 
         return {
             "added_count": len(processed_users),
@@ -95,11 +103,12 @@ class UserService:
                     if success:
                         modified_count += 1
                     else:
-                        errors.append(f"Użytkownik ID {user_id}: Aktualizacja nie powiodła się.")
+                        logger.error(f"Update failed for user ID {user_id}.")
+                        errors.append(f"Update failed for user ID {user_id}.")
             
             except Exception as e:
-                logger.error(f"Błąd przy aktualizacji użytkownika ID {update.get('id')}: {str(e)}")
-                errors.append(f"Błąd przy aktualizacji użytkownika ID {update.get('id')}: {str(e)}")
+                logger.error(f"Error updating user ID {update.get('id')}: {str(e)}")
+                errors.append(f"Error updating user ID {update.get('id')}: {str(e)}")
 
             return {
             "modified_count": modified_count,
@@ -128,7 +137,7 @@ class UserService:
     
     async def get_all_users(self) -> List[Dict]:
         """
-        Pobiera wszystkich użytkowników z bazy.
+        Gets all users from the database.
         """
         logger.info("Fetching all users from the database.")
         #users = []  # Mock zwracany
@@ -136,18 +145,26 @@ class UserService:
 
     async def prune_old_logs(self, cutoff_date: datetime):
         """
-        Usuwa logi starsze niż data graniczna.
-        Zgodne z polityką retencji danych.
+        Removes logs older than the specified cutoff date.
+        Compliant with data retention policy.
         """
         logger.info(f"Pruning logs older than {cutoff_date}.")
-        # return await self.log_repo.delete_older_than(cutoff_date)
-        return 100 # Zwraca liczbę usuniętych rekordów
+        try:
+            deleted_count = await self.log_repo.delete_older_than(cutoff_date)
+            return {
+                "deleted_count": deleted_count,
+                "errors": []
+            }
+        except Exception as e:
+            logger.error(f"Error pruning logs: {str(e)}")
+            return {
+                "deleted_count": 0,
+                "errors": [str(e)]
+            }
     
     async def get_logs(self, since: str) -> list:
         """
-        Pobiera logi od określonego znacznika czasu.
+        Gets logs from a specific timestamp.
         """
         logger.info(f"Fetching logs since {since}.")
-        logs = EmployeeRepository.get_logs_since(since) # Przykładowa metoda repozytorium
-
-        return logs
+        return self.log_repo.get_logs_since(since)

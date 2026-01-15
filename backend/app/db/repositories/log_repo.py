@@ -1,3 +1,4 @@
+from datetime import datetime
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import Optional, Dict, List, Any
@@ -36,4 +37,36 @@ class LogRepository:
             LIMIT :limit
         """)
         result = await self.session.execute(query, {"emp_id": employee_id, "limit": limit})
+        return [dict(row._mapping) for row in result.fetchall()]
+    
+    async def delete_older_than(self, cutoff_date: datetime) -> int:
+        """
+        Deletes logs older than the specified cutoff date.
+        Returns the number of deleted records.
+        """
+
+        query = text("""
+            DELETE FROM access_logs 
+            WHERE timestamp < :cutoff_date
+        """)
+        try:
+            result = await self.session.execute(query, {"cutoff_date": cutoff_date})
+            await self.session.commit()
+            return result.rowcount
+        except Exception as e:
+            await self.session.rollback()
+            raise e
+        
+    async def get_logs_since(self, since: datetime) -> List[Dict[str, Any]]:
+        """
+        Fetches logs since a specific timestamp.
+        """
+        query = text("""
+            SELECT l.log_id, l.timestamp, l.status, l.confidence, l.device_ip, l.employee_id, e.full_name
+            FROM access_logs l
+            LEFT JOIN employees e ON l.employee_id = e.id
+            WHERE l.timestamp >= :since
+            ORDER BY l.timestamp DESC
+        """)
+        result = await self.session.execute(query, {"since": since})
         return [dict(row._mapping) for row in result.fetchall()]
