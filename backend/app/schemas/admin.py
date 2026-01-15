@@ -34,6 +34,11 @@ class UserOperationsResponse(BaseModel):
     #added_modified_ids: Optional[List[int]] = None
     errors: Optional[List[str]] = None
 
+class GetUsersResponse(BaseModel):
+    success: bool
+    users: List[dict]
+    count: int
+
 class GetLogsResponse(BaseModel):
     success: bool
     logs: List[dict]

@@ -10,10 +10,10 @@ class AccessService:
     Bussiness logic of access control.
     """
     
-    def __init__(self):
+    def __init__(self, employee_repo: EmployeeRepository, log_repo: LogRepository):
         self.image_processor = ImageProcessingFacade()
-        self.log_repo = LogRepository()  # Dependency Injection
-        self.employee_repo = EmployeeRepository()
+        self.log_repo = log_repo 
+        self.employee_repo = employee_repo
 
     async def verify_entrance(self, qr_token: str, image_base64: str) -> Dict[str, Any]:
         """
@@ -85,7 +85,7 @@ class AccessService:
         Loggging access attempt to the database.
         """
         logger.debug(f"Logging access attempt: status={status}, employee_id={employee_id}, confidence={confidence}")
-        # await self.log_repo.create(...)
+        await self.log_repo.create(status=status, employee_id=employee_id, confidence=confidence)
 
     def _mock_get_user_by_token(self, token):
         """Pomocnicza funkcja mockująca bazę danych."""

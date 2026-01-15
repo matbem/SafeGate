@@ -8,9 +8,7 @@ CREATE TABLE employees (
     face_encoding VECTOR(128) NOT NULL,
     qr_token UUID NOT NULL UNIQUE,
     qr_valid_until TIMESTAMPTZ NOT NULL,
-    reference_photo_path TEXT NOT NULL,
-    photo_integrity_hash CHAR(64) NOT NULL, 
-
+    reference_photo TEXT NOT NULL,
     created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
 );
 

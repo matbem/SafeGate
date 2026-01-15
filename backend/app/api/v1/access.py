@@ -1,12 +1,13 @@
 from fastapi import APIRouter, HTTPException
 from app.schemas.access import AccessVerifyRequest, AccessVerifyResponse
-from app.services.access_service import get_access_service, AccessService
+from app.services.access_service import AccessService
+from app.api.deps import get_access_service
 
 router = APIRouter()
 
 @router.post("/verify", response_model=AccessVerifyResponse)
 async def verify_access(data: AccessVerifyRequest,
-                        access_service: AccessService = get_access_service()):
+                        access_service: AccessService = Depends(get_access_service)):
     """
     Endpoint: Weryfikacja wejścia
     Opis: Odbiera token QR i klatkę wideo, zwraca decyzję o otwarciu drzwi.

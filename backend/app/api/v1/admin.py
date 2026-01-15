@@ -5,10 +5,12 @@ from app.schemas.admin import (
     DeleteUserRequest,
     PruneLogsRequest,
     UserOperationsResponse,
+    GetUsersResponse,
     GetLogsResponse,
     PruneLogsResponse
 )
-from app.api.deps import get_user_service
+from app.api.deps import get_user_service, get_access_service
+from app.services.access_service import AccessService
 import datetime
 from typing import List
 from app.schemas.access import AccessLogRead
@@ -32,18 +34,18 @@ async def get_logs(timestamp: datetime = Query(..., description="Format ISO 8601
         return GetLogsResponse(success=True, logs=logs)
     return GetLogsResponse(success=False, logs=[])
 
-@router.get("/users", response_model=UserOperationsResponse) #do we need this function?
+@router.get("/users", response_model=GetUsersResponse) #do we need this function?
 async def get_users(user_service=Depends(get_user_service)):
     """
     Endpoint: Getting all users for admin panel
     Returns:
-    - UserOperationsResponse: response containing list of users
+    - GetUsersResponse: response containing list of users
     """
     users = await user_service.get_all_users()
     
     if users and isinstance(users, list):
-        return UserOperationsResponse(success=True, added_modified_count=len(users))
-    return UserOperationsResponse(success=False, added_modified_count=0)
+        return GetUsersResponse(success=True, users=users, count=len(users))
+    return GetUsersResponse(success=False, users=[], count=0)
 
 @router.post("/add_user", status_code=201, response_model=UserOperationsResponse)
 async def add_users(payload: AddUserRequest, user_service=Depends(get_user_service)):

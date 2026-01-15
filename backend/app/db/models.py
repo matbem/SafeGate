@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, DateTime, Float, Enum, ForeignKey
+from sqlalchemy import Column, Integer, String, DateTime, Float, Enum, ForeignKey, Vector
 from sqlalchemy.dialects.postgresql import UUID, INET
 from sqlalchemy.orm import declarative_base
 import enum
@@ -21,8 +21,7 @@ class Employee(Base):
     face_encoding = Column(Vector(128)) 
     qr_token = Column(UUID(as_uuid=True), unique=True, nullable=False)
     qr_valid_until = Column(DateTime(timezone=True), nullable=False)
-    reference_photo_path = Column(String, nullable=False)
-    photo_integrity_hash = Column(String(64), nullable=False)
+    reference_photo = Column(String, nullable=False)
     created_at = Column(DateTime(timezone=True))
 
 class AccessLog(Base):
