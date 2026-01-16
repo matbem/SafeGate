@@ -15,4 +15,4 @@ RUN pip install -r requirements.txt
 #Copy the code
 COPY . .
 #Start the app with host binding
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
