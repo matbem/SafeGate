@@ -43,7 +43,7 @@ class UserService:
                     qr_token = str(uuid.uuid4())
 
                 vali_until = user.get("qr_valid_until")
-                if not vali_until:
+                if not valid_until:
                     valid_until = (datetime.now() + timedelta(days=360)).isoformat()
 
                 new_user = {
