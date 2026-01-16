@@ -1,5 +1,22 @@
 // frontend/src/types.ts
 
+// --- KIOSK TYPES ---
+export interface VerifyRequest {
+  qr_token: string;
+  image_base64: string;
+  timestamp: string; // ISO 8601
+}
+
+export interface VerifyResponse {
+  access_granted: boolean;
+  message: string;
+  confidence_score?: number;
+  door_unlock_duration_ms?: number;
+  error_code?: string;
+}
+
+// frontend/src/types.ts
+
 // --- Auth & Generic ---
 export interface LoginResponse {
   success: boolean;
@@ -31,13 +48,12 @@ export interface VerifyResponse {
 }
 
 // --- Admin: Employees (Users) ---
-// Matches backend 'Employee' model and 'GetUsersResponse'
 export interface Employee {
   id: number;
   full_name: string;
   qr_token: string;
   qr_valid_until: string;
-  reference_photo_base64?: string;
+  reference_photo_base64?: string; // Dodane pole zdjęcia
   created_at?: string;
 }
 
@@ -68,7 +84,6 @@ export interface DeleteUserRequest {
 }
 
 // --- Admin: Logs ---
-// Matches backend 'AccessLog' and 'GetLogsResponse'
 export interface AccessLog {
   log_id: number;
   timestamp: string;
@@ -76,7 +91,7 @@ export interface AccessLog {
   confidence?: number;
   device_ip?: string;
   employee_id?: number;
-  full_name?: string; // Joined from employees table
+  full_name?: string;
 }
 
 export interface GetLogsResponse {
