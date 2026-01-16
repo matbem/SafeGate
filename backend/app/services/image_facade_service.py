@@ -24,8 +24,8 @@ class ImageProcessingFacade:
         np_arr = np.frombuffer(base64.b64decode(image_base64), np.uint8)
         img = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
         return cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-    
-    def generate_face_encoding(self, image_rgb: np.ndarray) -> Optional[list][float]:
+
+    def generate_face_encoding(self, image_rgb: np.ndarray) -> Optional[list[float]]:
         """
         Generates a 128-d face encoding from an RGB image.
         """
