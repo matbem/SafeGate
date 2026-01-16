@@ -1,3 +1,5 @@
+from datetime import datetime
+
 from pydantic import BaseModel
 from typing import List, Optional
 
@@ -5,14 +7,14 @@ class UserData(BaseModel):
     id: Optional[int] = None
     full_name: Optional[str] = None
     qr_token: Optional[str] = None
-    qr_valid_until: Optional[str] = None
+    qr_valid_until: Optional[datetime] = None
     reference_photo_base64: Optional[str] = None
 
 class UserUpdateRequest(BaseModel):
     id: Optional[int] = None
     qr_token: Optional[str] = None
     full_name: Optional[str] = None
-    qr_valid_until: Optional[str] = None
+    qr_valid_until: Optional[datetime] = None
     reference_photo_base64: Optional[str] = None
 
 class AddUserRequest(BaseModel):
