@@ -63,7 +63,7 @@ class BiometricsCore:
             return None
             
         encodings = face_recognition.face_encodings(image_rgb, locations)
-        return encodings[0].tolist() if encodings else None #0 index because it returns list of encoding arrays for all faces but we suppose that there is only one face
+        return encodings[0].tolist() if encodings else None
         
     def verify_face(self, known_embedding: List[float], candidate_embedding: List[float]) -> Dict[str, Any]:
         """Verifies if a candidate face matches a known face embedding."""
@@ -72,7 +72,7 @@ class BiometricsCore:
         candidate_np = np.array(candidate_embedding)
 
         distance = face_recognition.face_distance([known_np], candidate_np)
-        distance = distance[0]  # Get the single distance value
+        distance = distance[0]
 
         is_match = distance < self.MATCH_TOLERANCE
         confidence = max(0.0, 1.0 - distance)
@@ -80,5 +80,5 @@ class BiometricsCore:
         return {
             "is_match": is_match,
             "distance": distance,
-            "confidence": round(confidence, 2)
-        }      
+            "confidence_score": round(confidence, 2) # POPRAWKA: ujednolicona nazwa klucza
+        }

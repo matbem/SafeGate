@@ -1,13 +1,14 @@
-from datetime import datetime
-from typing import Dict, Any, Optional, Tuple
+from datetime import datetime, timezone
+from typing import Dict, Any, Optional
 from app.services.image_facade_service import ImageProcessingFacade
 from app.db.repositories.log_repo import LogRepository
 from app.db.repositories.employee_repo import EmployeeRepository
 from loguru import logger
+from app.db.models import AccessStatus
 
 class AccessService:
     """
-    Bussiness logic of access control.
+    Business logic of access control.
     """
     
     def __init__(self, employee_repo: EmployeeRepository, log_repo: LogRepository):
@@ -18,61 +19,86 @@ class AccessService:
     async def verify_entrance(self, qr_token: str, image_base64: str) -> Dict[str, Any]:
         """
         Main method to verify entrance based on QR token and live image.
-        Parameters:
-        - qr_token: str - QR code token from the user
-        - image_base64: str - Base64 encoded image from the camera
-        Returns:
-        - Dict with access decision and details
         """
-
         logger.info(f"Verifying access for QR Token: {qr_token}")
         
-        # Etap 1: Weryfikacja QR (Fail-Fast) 
+        # --- KROK 1: Sprawdzenie QR w bazie ---
         user = await self.employee_repo.get_by_qr(qr_token)
-        
-        # MOCK danych użytkownika na potrzeby przykładu
-        # user = self._mock_get_user_by_token(qr_token)
-        logger.debug(f"User fetched from DB: {user}")
 
+        # --- SCENARIUSZ: QR NIE ISTNIEJE W BAZIE ---
         if not user:
-            await self._log_attempt(status="INVALID_QR", employee_id=None)
+            logger.warning(f"QR Token '{qr_token}' not found in DB.")
+            # Zapisujemy TYLKO kod QR, bez zdjęcia (image=None)
+            await self._log_attempt(
+                status="INVALID_QR", 
+                employee_id=None, 
+                image=None,          # <--- BRAK ZDJĘCIA
+                qr_content=qr_token  # <--- Zapisujemy treść błędnego kodu
+            )
             return {
                 "access_granted": False, 
                 "error_code": "INVALID_QR", 
-                "message": "Wrong or expired QR token."
+                "message": "Invalid QR code."
             }
         
-
-        if user['qr_valid_until'] < datetime.now():
-            await self._log_attempt(status="INVALID_QR", employee_id=user['id'])
+        # --- SCENARIUSZ: QR ISTNIEJE, ALE WYGASŁ ---
+        if user['qr_valid_until'] < datetime.now(timezone.utc):
+            # Tu możemy zdecydować - zapisujemy zdjęcie czy nie? 
+            # Zazwyczaj przy wygasłym warto zapisać, kto próbował wejść.
+            await self._log_attempt(
+                status="EXPIRED_QR", 
+                employee_id=user['id'], 
+                image=image_base64, # Tu zapisujemy zdjęcie (opcjonalnie zmień na None)
+                qr_content=qr_token
+            )
             return {
                 "access_granted": False, 
                 "error_code": "EXPIRED_QR", 
                 "message": "QR token has expired."
             }
 
+        # --- KROK 2: Skanowanie Twarzy (tylko jeśli QR jest poprawny) ---
+        # Dopiero teraz uruchamiamy ciężkie obliczeniowo AI
         face_verification = self.image_processor.process_verification_request(
             image_base64=image_base64,
             known_encoding=user['face_encoding']
         )
         logger.debug(f"Face verification result: {face_verification}")
 
+        status_for_db = face_verification['status']
+        valid_statuses = [e.value for e in AccessStatus]
+
+        # Logika mapowania statusów (sukces / błędy AI)
         if face_verification['success']:
-            await self._log_attempt(
-                status=face_verification['status'], 
-                employee_id=user['id'],
-                confidence=face_verification.get('confidence_score', 0.0)
-            )
+            status_for_db = "SUCCESS"
+        else:
+            if status_for_db == 'LIVENESS_FAILED':
+                error_msg = face_verification.get('error_message', '')
+                if "No face detected" in error_msg:
+                    status_for_db = "NO_FACE"
+                else:
+                    status_for_db = "FACE_MISMATCH"
+            elif status_for_db == 'ERROR':
+                status_for_db = "FACE_MISMATCH"
+            elif status_for_db not in valid_statuses:
+                status_for_db = "FACE_MISMATCH"
+
+        # --- ZAPIS WYNIKU Z TWARZĄ ---
+        await self._log_attempt(
+            status=status_for_db, 
+            employee_id=user['id'], 
+            confidence=face_verification.get('confidence_score', 0.0),
+            image=image_base64,   # <--- Zapisujemy zdjęcie (bo QR był OK)
+            qr_content=qr_token
+        )
+
+        if face_verification['success']:
             return {
                 "access_granted": True,
-                "error_code": face_verification['status'],
-                "message": "Access granted.",}
+                "error_code": "SUCCESS",
+                "message": "Access granted.",
+            }
         
-        await self._log_attempt(
-            status=face_verification['status'], 
-            employee_id=user['id'], 
-            confidence=face_verification.get('confidence_score', 0.0)
-        )
         return {
             "access_granted": False,
             "error_code": face_verification['status'],
@@ -80,27 +106,18 @@ class AccessService:
         }
     
 
-    async def _log_attempt(self, status: str, employee_id: Optional[int], confidence: float = 0.0):
+    async def _log_attempt(self, status: str, employee_id: Optional[int], confidence: float = 0.0, image: Optional[str] = None, qr_content: Optional[str] = None):
         """
-        Loggging access attempt to the database.
+        Logging access attempt to the database.
         """
-        logger.debug(f"Logging access attempt: status={status}, employee_id={employee_id}, confidence={confidence}")
-        await self.log_repo.create(status=status, employee_id=employee_id, confidence=confidence)
-
-    def _mock_get_user_by_token(self, token):
-        """Pomocnicza funkcja mockująca bazę danych."""
-        if token == "valid_token_123":
-            return {
-                "id": 1,
-                "full_name": "Jan Kowalski",
-                "qr_valid_until": datetime(2030, 1, 1),
-                # Przykładowy wektor (mock)
-                "face_encoding": [-0.1] * 128 
-            }
-        return None
+        # Przekazujemy argumenty do repozytorium
+        await self.log_repo.create(
+            status=status, 
+            employee_id=employee_id, 
+            confidence=confidence,
+            captured_image=image,
+            qr_content=qr_content
+        )
     
     async def get_history(self, employee_id: int, limit: int = 10):
-        """ 
-        Fetches access history for a given employee.
-        """
         return await self.log_repo.get_employee_history(employee_id, limit)

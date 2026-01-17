@@ -1,124 +1,210 @@
-// frontend/src/pages/UserPage.tsx
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import Webcam from 'react-webcam';
-import { ScanLine, CheckCircle, XCircle, Loader2 } from 'lucide-react';
-import { api } from '../api';
+import jsQR from 'jsqr';
 import { formatISO } from 'date-fns';
-import type {VerifyResponse} from '../types';
+import { CheckCircle, XCircle, Loader2, Camera, QrCode } from 'lucide-react';
+import { api } from '../api';
+import type { VerifyResponse } from '../types';
 
-type AppState = 'IDLE' | 'PROCESSING' | 'SUCCESS' | 'DENIED' | 'ERROR';
+// Dodano stan PREPARING
+type AppState = 'SCANNING' | 'PREPARING' | 'PROCESSING' | 'SUCCESS' | 'DENIED' | 'ERROR';
 
 const UserPage: React.FC = () => {
-  const [state, setState] = useState<AppState>('IDLE');
-  const [message, setMessage] = useState<string>('Zeskanuj kod QR, aby wejść');
-  const [qrBuffer, setQrBuffer] = useState<string>('');
+  const [state, setState] = useState<AppState>('SCANNING');
+  const [message, setMessage] = useState<string>('Zeskanuj kod QR');
+  
   const webcamRef = useRef<Webcam>(null);
+  const scanIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  
+  // Przechowujemy token, żeby użyć go po opóźnieniu
+  const [capturedToken, setCapturedToken] = useState<string | null>(null);
 
-  const resetToIdle = useCallback(() => {
-    setState('IDLE');
-    setMessage('Zeskanuj kod QR, aby wejść');
-    setQrBuffer('');
+  const resetToScanning = useCallback(() => {
+    setState('SCANNING');
+    setMessage('Zeskanuj kod QR');
+    setCapturedToken(null);
   }, []);
 
+  const scanFrame = useCallback(() => {
+    if (state !== 'SCANNING') return;
+    
+    const video = webcamRef.current?.video;
+    if (video && video.readyState === video.HAVE_ENOUGH_DATA) {
+        const canvas = document.createElement('canvas');
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        const ctx = canvas.getContext('2d', { willReadFrequently: true });
+        
+        if (ctx) {
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+            const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+            
+            const code = jsQR(imageData.data, imageData.width, imageData.height, {
+                inversionAttempts: "dontInvert",
+            });
+
+            if (code && code.data) {
+                // KROK 1: Wykryto kod - ZATRZYMUJEMY SKANOWANIE
+                startVerificationSequence(code.data);
+            }
+        }
+    }
+  }, [state]);
+
+  const startVerificationSequence = (token: string) => {
+      setCapturedToken(token);
+      setState('PREPARING'); // Nowy stan
+      setMessage('Kod przyjęty. Spójrz w kamerę...');
+      
+      // KROK 2: Czekamy 1.5 sekundy, aż użytkownik zabierze rękę
+      setTimeout(() => {
+          handleVerification(token);
+      }, 1500); 
+  };
+
   useEffect(() => {
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (state !== 'IDLE') return;
-      if (event.key === 'Enter') {
-        if (qrBuffer.length > 0) handleVerification(qrBuffer);
-        setQrBuffer('');
-      } else if (event.key.length === 1) {
-        setQrBuffer(prev => prev + event.key);
-      }
+    if (state === 'SCANNING') {
+        scanIntervalRef.current = setInterval(scanFrame, 100);
+    } else {
+        if (scanIntervalRef.current) clearInterval(scanIntervalRef.current);
+    }
+    return () => {
+        if (scanIntervalRef.current) clearInterval(scanIntervalRef.current);
     };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [state, qrBuffer]);
+  }, [state, scanFrame]);
 
-  const handleVerification = async (token: string) => {
+  const handleVerification = async (qrToken: string) => {
     setState('PROCESSING');
-    setMessage('Proszę spojrzeć w kamerę...');
+    setMessage('Weryfikacja biometryczna...');
 
-    setTimeout(async () => {
-      try {
+    try {
+        // KROK 3: Dopiero teraz robimy zdjęcie
         const imageSrc = webcamRef.current?.getScreenshot();
+        
         if (!imageSrc) throw new Error('Nie udało się pobrać obrazu z kamery');
 
-        // Payload zgodny z access.py
         const payload = {
-          qr_token: token,
-          image_base64: imageSrc,
-          timestamp: formatISO(new Date())
+            qr_token: qrToken,
+            image_base64: imageSrc,
+            timestamp: formatISO(new Date())
         };
 
         const response: VerifyResponse = await api.verifyAccess(payload);
 
         if (response.access_granted) {
-          setState('SUCCESS');
-          setMessage(response.message || 'Witaj!');
-          setTimeout(resetToIdle, 3000);
+            setState('SUCCESS');
+            setMessage(response.message || 'Dostęp przyznany!');
+            setTimeout(resetToScanning, 3000);
         } else {
-          setState('DENIED');
-          setMessage('Odmowa dostępu');
-          setTimeout(resetToIdle, 3000);
+            setState('DENIED');
+            setMessage(response.message || 'Odmowa dostępu');
+            setTimeout(resetToScanning, 3000);
         }
-      } catch (error) {
-        console.error(error);
+
+    } catch (error) {
+        console.error("Verification error:", error);
         setState('ERROR');
-        setMessage('Błąd systemu.');
-        setTimeout(resetToIdle, 3000);
-      }
-    }, 1500);
+        setMessage('Błąd systemu');
+        setTimeout(resetToScanning, 3000);
+    }
   };
 
-  // --- Renderowanie (identyczne jak wcześniej) ---
-  if (state === 'IDLE') {
+  // --- UI ---
+  if (state === 'SCANNING' || state === 'PREPARING' || state === 'PROCESSING') {
     return (
-      <div className="h-screen w-screen bg-gray-900 flex flex-col items-center justify-center text-white">
-        <div className="absolute opacity-0 pointer-events-none">
-          <Webcam ref={webcamRef} screenshotFormat="image/jpeg" width={720} videoConstraints={{ facingMode: "user" }} />
+      <div className="h-screen w-screen bg-gray-900 flex flex-col items-center justify-center relative overflow-hidden text-white">
+        
+        {/* Nagłówek Stanu */}
+        <h2 className={`absolute top-10 text-2xl md:text-3xl font-bold z-20 drop-shadow-md text-center px-4 transition-colors duration-300 ${
+            state === 'PREPARING' ? 'text-yellow-400' : 
+            state === 'PROCESSING' ? 'text-blue-400' : 'text-white'
+        }`}>
+            {state === 'PROCESSING' && <Loader2 className="inline animate-spin mr-2" />}
+            {state === 'PREPARING' && <Camera className="inline animate-pulse mr-2" />}
+            {message}
+        </h2>
+
+        {/* Podgląd Wideo */}
+        <div className={`relative w-full max-w-2xl aspect-video bg-black rounded-xl overflow-hidden shadow-2xl border transition-all duration-500 ${
+            state === 'PREPARING' ? 'border-yellow-500 scale-105 shadow-[0_0_50px_rgba(234,179,8,0.3)]' : 
+            state === 'PROCESSING' ? 'border-blue-500 opacity-80' : 
+            'border-gray-700'
+        }`}>
+            <Webcam
+                ref={webcamRef}
+                screenshotFormat="image/jpeg"
+                videoConstraints={{ facingMode: "user" }}
+                className="w-full h-full object-cover"
+                audio={false}
+            />
+
+            {/* Winieta */}
+            <div className="absolute inset-0 border-[50px] border-black/50 pointer-events-none hidden md:block"></div>
+
+            {/* UI Skanowania (tylko gdy SCANNING) */}
+            {state === 'SCANNING' && (
+                <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-64 h-64 md:w-80 md:h-80 border-2 border-blue-500/60 rounded-lg flex items-center justify-center shadow-[0_0_100px_rgba(59,130,246,0.2)]">
+                    {/* Rogi celownika */}
+                    <div className="absolute top-0 left-0 w-6 h-6 border-t-4 border-l-4 border-blue-500 -mt-1 -ml-1"></div>
+                    <div className="absolute top-0 right-0 w-6 h-6 border-t-4 border-r-4 border-blue-500 -mt-1 -mr-1"></div>
+                    <div className="absolute bottom-0 left-0 w-6 h-6 border-b-4 border-l-4 border-blue-500 -mb-1 -ml-1"></div>
+                    <div className="absolute bottom-0 right-0 w-6 h-6 border-b-4 border-r-4 border-blue-500 -mb-1 -mr-1"></div>
+
+                    {/* Skaner */}
+                    <div className="w-full h-0.5 bg-blue-400 shadow-[0_0_15px_rgba(96,165,250,1)] animate-scan-vertical opacity-80 absolute"></div>
+                </div>
+            )}
+
+            {/* UI Przygotowania (tylko gdy PREPARING) */}
+            {state === 'PREPARING' && (
+                 <div className="absolute inset-0 flex items-center justify-center bg-black/20 backdrop-blur-[2px] animate-in fade-in">
+                     <div className="text-center">
+                         <QrCode className="w-16 h-16 text-green-400 mx-auto mb-2" />
+                         <p className="text-xl font-bold text-white drop-shadow-md">Zabierz kod QR</p>
+                     </div>
+                 </div>
+            )}
         </div>
-        <ScanLine size={120} className="animate-pulse mb-8 text-blue-400" />
-        <h1 className="text-5xl font-bold mb-4 text-center">{message}</h1>
-        <p className="text-gray-400 mt-4">Przyłóż przepustkę do czytnika</p>
-        <button onClick={() => handleVerification("550e8400-e29b-41d4-a716-446655440000")} className="absolute bottom-10 bg-gray-800 text-xs px-4 py-2 rounded text-gray-500 hover:text-white">
-          [DEBUG] Symuluj skan QR
-        </button>
+
+        {/* Instrukcja dolna */}
+        <p className="mt-8 text-gray-400 flex items-center gap-2">
+            {state === 'SCANNING' ? 'Umieść kod QR w ramce' : 'Nie ruszaj się...'}
+        </p>
+        
+        <style>{`
+            @keyframes scan-vertical {
+                0% { top: 10%; opacity: 0; }
+                10% { opacity: 1; }
+                90% { opacity: 1; }
+                100% { top: 90%; opacity: 0; }
+            }
+            .animate-scan-vertical {
+                animation: scan-vertical 2s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+            }
+        `}</style>
       </div>
     );
   }
 
-  if (state === 'PROCESSING') {
-    return (
-      <div className="h-screen w-screen bg-black flex flex-col items-center justify-center relative">
-        <h2 className="absolute top-10 text-3xl text-white font-semibold z-10 drop-shadow-md">{message}</h2>
-        <div className="relative border-4 border-blue-500 rounded-lg overflow-hidden shadow-2xl">
-          <Webcam ref={webcamRef} screenshotFormat="image/jpeg" width={1280} height={720} videoConstraints={{ facingMode: "user" }} className="block" />
-          <div className="absolute inset-0 border-2 border-white/30 rounded-lg m-12">
-            <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2">
-               <Loader2 size={64} className="animate-spin text-blue-500" />
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
+  // --- Ekrany Wyników (bez zmian) ---
   if (state === 'SUCCESS') {
     return (
-      <div className="h-screen w-screen bg-green-600 flex flex-col items-center justify-center text-white">
-        <CheckCircle size={180} className="mb-8 drop-shadow-lg" />
-        <h1 className="text-6xl font-bold text-center drop-shadow-md">{message}</h1>
-        <p className="text-2xl mt-4 opacity-90">Drzwi otwarte</p>
+      <div className="h-screen w-screen bg-green-600 flex flex-col items-center justify-center text-white animate-in fade-in zoom-in duration-300">
+        <div className="bg-white/20 p-8 rounded-full mb-8 backdrop-blur-sm">
+             <CheckCircle size={120} className="text-white drop-shadow-md" />
+        </div>
+        <h1 className="text-5xl font-bold text-center drop-shadow-md">{message}</h1>
       </div>
     );
   }
 
   if (state === 'DENIED' || state === 'ERROR') {
     return (
-      <div className="h-screen w-screen bg-red-600 flex flex-col items-center justify-center text-white">
-        <XCircle size={180} className="mb-8 drop-shadow-lg" />
-        <h1 className="text-6xl font-bold text-center drop-shadow-md">{message}</h1>
-        <p className="text-2xl mt-4 opacity-90">Brak autoryzacji</p>
+      <div className="h-screen w-screen bg-red-600 flex flex-col items-center justify-center text-white animate-in slide-in-from-bottom-10 duration-300">
+        <div className="bg-white/20 p-8 rounded-full mb-8 backdrop-blur-sm">
+            <XCircle size={120} className="text-white drop-shadow-md" />
+        </div>
+        <h1 className="text-5xl font-bold text-center drop-shadow-md">{message}</h1>
       </div>
     );
   }

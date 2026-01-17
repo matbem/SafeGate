@@ -20,7 +20,9 @@ CREATE TABLE access_logs (
     employee_id INT REFERENCES employees(id) ON DELETE SET NULL,
     status access_status NOT NULL,
     confidence FLOAT,
-    device_ip INET
+    device_ip INET,
+    captured_image TEXT,
+    qr_content TEXT
 );
 
 CREATE TABLE admins (

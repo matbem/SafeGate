@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, DateTime, Float, Enum, ForeignKey
+from sqlalchemy import Column, Integer, String, DateTime, Float, Enum, ForeignKey, Text
 from sqlalchemy.dialects.postgresql import UUID, INET
 from sqlalchemy.orm import declarative_base
 from pgvector.sqlalchemy import Vector
@@ -18,7 +18,6 @@ class Employee(Base):
     
     id = Column(Integer, primary_key=True)
     full_name = Column(String, nullable=False)
-    # Dla pgvector w SQLAlchemy wymagana jest biblioteka pgvector-python
     face_encoding = Column(Vector(128)) 
     qr_token = Column(UUID(as_uuid=True), unique=True, nullable=False)
     qr_valid_until = Column(DateTime(timezone=True), nullable=False)
@@ -34,6 +33,9 @@ class AccessLog(Base):
     status = Column(Enum(AccessStatus), nullable=False)
     confidence = Column(Float)
     device_ip = Column(INET)
+    captured_image = Column(Text, nullable=True)
+    qr_content = Column(String, nullable=True)
+    
 
 class Admin(Base):
     __tablename__ = "admins"
