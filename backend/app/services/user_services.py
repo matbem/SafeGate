@@ -140,7 +140,6 @@ class UserService:
         Gets all users from the database.
         """
         logger.info("Fetching all users from the database.")
-        #users = []  # Mock zwracany
         return await self.employee_repo.get_all()
 
     async def prune_old_logs(self, cutoff_date: datetime):
@@ -167,4 +166,5 @@ class UserService:
         Gets logs from a specific timestamp.
         """
         logger.info(f"Fetching logs since {since}.")
-        return self.log_repo.get_logs_since(since)
+        # POPRAWKA: Dodano słowo kluczowe 'await'
+        return await self.log_repo.get_logs_since(since)

@@ -11,6 +11,10 @@ class EmployeeRepository:
         Fetches user by QR token. 
         Used in AccessService.verify_entrance.
         """
+        # --- ZABEZPIECZENIE: Jeśli token jest pusty lub None, nie szukaj w bazie ---
+        if not qr_token:
+            return None
+
         query = text("""
             SELECT id, full_name, face_encoding, qr_valid_until 
             FROM employees 
@@ -21,13 +25,12 @@ class EmployeeRepository:
         row = result.fetchone()
         
         if row:
-            # Convert row to dict and parse vector if necessary
+            # Konwersja wiersza na słownik
             return {
                 "id": row.id,
                 "full_name": row.full_name,
-                # Postgres vector returns as a string or list depending on driver
-                # Ensure it returns a list of floats for the biometric engine
-                "face_encoding":  eval(row.face_encoding) if isinstance(row.face_encoding, str) else row.face_encoding,
+                # Obsługa formatu wektora (string z bazy -> list)
+                "face_encoding": eval(row.face_encoding) if isinstance(row.face_encoding, str) else row.face_encoding,
                 "qr_valid_until": row.qr_valid_until
             }
         return None
@@ -43,13 +46,14 @@ class EmployeeRepository:
             RETURNING id
         """)
         
-        # 'face_encoding' must be passed as a list of floats, pgvector handles the rest
+        # Przygotowanie parametrów
         params = {
             "full_name": user_data["full_name"],
             "qr_token": user_data["qr_token"],
             "qr_valid_until": user_data["qr_valid_until"],
-            "face_encoding": str(user_data["face_encoding"]), # Cast to string for SQL format if needed
-            "ref_photo": user_data.get("reference_photo", ""),
+            # Konwersja listy floatów na string dla bazy (jeśli wymagane przez sterownik)
+            "face_encoding": str(user_data["face_encoding"]), 
+            "ref_photo": user_data.get("reference_photo", "") # Lub reference_photo_base64, zależnie co przychodzi z serwisu
         }
         
         result = await self.session.execute(query, params)
@@ -77,7 +81,10 @@ class EmployeeRepository:
             set_clauses.append("face_encoding = :face_encoding")
             encoding = update_data["face_encoding"]
             params["face_encoding"] = str(encoding) if isinstance(encoding, list) else encoding
-        if "reference_photo" in update_data:
+        if "reference_photo_base64" in update_data:
+            set_clauses.append("reference_photo = :ref_photo")
+            params["ref_photo"] = update_data["reference_photo_base64"]
+        elif "reference_photo" in update_data:
             set_clauses.append("reference_photo = :ref_photo")
             params["ref_photo"] = update_data["reference_photo"]
         
@@ -137,7 +144,8 @@ class EmployeeRepository:
                 "full_name": row.full_name,
                 "qr_token": row.qr_token,
                 "qr_valid_until": row.qr_valid_until,
-                "reference_photo_base64": row.reference_photo
+                # Mapujemy kolumnę z bazy na nazwę oczekiwaną przez frontend
+                "reference_photo_base64": row.reference_photo 
             })
         
         return users

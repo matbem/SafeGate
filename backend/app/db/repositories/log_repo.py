@@ -7,21 +7,31 @@ class LogRepository:
     def __init__(self, session: AsyncSession):
         self.session = session
 
-    async def create(self, employee_id: Optional[int], status: str, confidence: float, ip: str = "127.0.0.1"):
+    async def create(
+        self, 
+        employee_id: Optional[int], 
+        status: str, 
+        confidence: float, 
+        ip: str = "127.0.0.1", 
+        captured_image: Optional[str] = None,
+        qr_content: Optional[str] = None
+    ):
         """
-        Logs an access attempt.
-        Used in AccessService._log_attempt.
+        Logs an access attempt with optional captured image (base64).
         """
+        # <--- 2. Dodajemy captured_image do INSERT
         query = text("""
-            INSERT INTO access_logs (employee_id, status, confidence, device_ip)
-            VALUES (:employee_id, :status, :confidence, :ip)
+            INSERT INTO access_logs (employee_id, status, confidence, device_ip, captured_image, qr_content)
+            VALUES (:employee_id, :status, :confidence, :ip, :captured_image, :qr_content)
         """)
         
         await self.session.execute(query, {
             "employee_id": employee_id,
             "status": status,
             "confidence": confidence,
-            "ip": ip
+            "ip": ip,
+            "captured_image": captured_image,
+            "qr_content": qr_content
         })
         await self.session.commit()
     
@@ -29,8 +39,9 @@ class LogRepository:
         """
         Fetches access log history for a given employee.
         """
+        # <--- 3. Dodajemy captured_image do SELECT
         query = text("""
-            SELECT timestamp, status, confidence, device_ip 
+            SELECT log_id, timestamp, status, confidence, device_ip, captured_image, qr_content
             FROM access_logs 
             WHERE employee_id = :emp_id 
             ORDER BY timestamp DESC 
@@ -42,9 +53,7 @@ class LogRepository:
     async def delete_older_than(self, cutoff_date: datetime) -> int:
         """
         Deletes logs older than the specified cutoff date.
-        Returns the number of deleted records.
         """
-
         query = text("""
             DELETE FROM access_logs 
             WHERE timestamp < :cutoff_date
@@ -62,7 +71,16 @@ class LogRepository:
         Fetches logs since a specific timestamp.
         """
         query = text("""
-            SELECT l.log_id, l.timestamp, l.status, l.confidence, l.device_ip, l.employee_id, e.full_name
+            SELECT 
+                l.log_id, 
+                l.timestamp, 
+                l.status, 
+                l.confidence, 
+                l.device_ip, 
+                l.captured_image,
+                l.qr_content,
+                l.employee_id, 
+                e.full_name
             FROM access_logs l
             LEFT JOIN employees e ON l.employee_id = e.id
             WHERE l.timestamp >= :since
