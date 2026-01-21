@@ -3,6 +3,8 @@ import { api } from '../api';
 import type { Employee, AccessLog } from '../types';
 import { LogOut, Users, FileText, Trash2, Plus, RefreshCw, History, ShieldAlert, Upload, X, Download, QrCode, Image as ImageIcon } from 'lucide-react';
 import { QRCodeCanvas } from 'qrcode.react';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 
 // Funkcja pomocnicza do tłumaczenia statusów
 const getStatusBadge = (status: string) => {
@@ -38,11 +40,19 @@ const AdminPage: React.FC = () => {
   const [selectedQrUser, setSelectedQrUser] = useState<Employee | null>(null);
   const [selectedHistoryUser, setSelectedHistoryUser] = useState<Employee | null>(null);
   
-  // NOWY STAN: Podgląd zdjęcia
   const [viewImage, setViewImage] = useState<string | null>(null);
 
   const [historyLogs, setHistoryLogs] = useState<AccessLog[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
+
+  // --- PDF STATES ---
+  const [isPdfModalOpen, setIsPdfModalOpen] = useState(false);
+  const [pdfLoading, setPdfLoading] = useState(false);
+  const [pdfFilters, setPdfFilters] = useState({
+    userId: 'all',
+    startDate: new Date(Date.now() - 86400000).toISOString().slice(0, 16),
+    endDate: new Date().toISOString().slice(0, 16)
+  });
 
   const [newUser, setNewUser] = useState<{ full_name: string; qr_valid_until: string; reference_photo_base64?: string }>({
     full_name: '',
@@ -53,6 +63,12 @@ const AdminPage: React.FC = () => {
   useEffect(() => {
     if (token) fetchData();
   }, [token, activeTab]);
+
+  useEffect(() => {
+    if (isPdfModalOpen && users.length === 0) {
+      api.getUsers().then(setUsers).catch(console.error);
+    }
+  }, [isPdfModalOpen]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -176,6 +192,210 @@ const AdminPage: React.FC = () => {
     }
   };
 
+  // --- PDF FONT LOADER (POPRAWIONE: Load Regular + Bold) ---
+  const applyPolishFont = async (doc: jsPDF) => {
+    try {
+        // 1. Pobieramy Regular
+        const respReg = await fetch('https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.1.66/fonts/Roboto/Roboto-Regular.ttf');
+        const blobReg = await respReg.blob();
+        
+        // 2. Pobieramy Medium (użyjemy jako Bold, bo jest czytelniejszy w druku tabel)
+        const respBold = await fetch('https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.1.66/fonts/Roboto/Roboto-Medium.ttf');
+        const blobBold = await respBold.blob();
+
+        const loadFont = (blob: Blob, name: string, style: string) => {
+             return new Promise<void>((resolve) => {
+                const reader = new FileReader();
+                reader.onloadend = () => {
+                    const base64 = (reader.result as string).split(',')[1];
+                    doc.addFileToVFS(name, base64);
+                    doc.addFont(name, 'Roboto', style);
+                    resolve();
+                };
+                reader.readAsDataURL(blob);
+             });
+        };
+
+        await Promise.all([
+            loadFont(blobReg, 'Roboto-Regular.ttf', 'normal'),
+            loadFont(blobBold, 'Roboto-Medium.ttf', 'bold') // Rejestrujemy Medium jako Bold
+        ]);
+
+        doc.setFont('Roboto'); 
+    } catch (error) {
+        console.error("Nie udało się załadować polskiej czcionki.", error);
+    }
+  };
+
+  // --- PDF GENERATION (SIMPLE) ---
+  const generatePDF = async () => {
+    const doc = new jsPDF('p', 'mm', 'a4');
+
+    await applyPolishFont(doc);
+
+    doc.setFontSize(18);
+    // Upewniamy się, że tytuł też ma polskie znaki (choć 'Roboto' jest już ustawione globalnie)
+    doc.setFont('Roboto', 'bold');
+    doc.text('Raport logowania użytkowników', 14, 22);
+    
+    doc.setFont('Roboto', 'normal');
+    doc.setFontSize(10);
+    doc.setTextColor(100);
+    doc.text(`Wygenerowano: ${new Date().toLocaleString()}`, 14, 30);
+    doc.text(`Zakres danych od: ${new Date(logSince).toLocaleString()}`, 14, 35);
+
+    const tableColumn = ["Data i Czas", "ID", "Pracownik", "Status", "Pewność (%)"];
+    const tableRows = logs.map(log => {
+      let statusText = log.status;
+      if (log.status === 'SUCCESS') statusText = 'Prawidłowe';
+      if (log.status === 'FACE_MISMATCH') statusText = 'Niezgodna twarz';
+      if (log.status === 'NO_FACE') statusText = 'Brak twarzy';
+      if (log.status === 'INVALID_QR') statusText = 'Błędny QR';
+
+      return [
+        new Date(log.timestamp).toLocaleString(),
+        log.employee_id || '-',
+        log.full_name || '-',
+        statusText,
+        log.confidence ? `${(log.confidence * 100).toFixed(1)}%` : '-'
+      ];
+    });
+
+    autoTable(doc, {
+      head: [tableColumn],
+      body: tableRows,
+      startY: 40,
+      theme: 'grid',
+      styles: {
+        fontSize: 8,
+        cellPadding: 3,
+        font: 'Roboto', // Styl dla komórek
+      },
+      headStyles: {
+        fillColor: [41, 128, 185],
+        textColor: 255,
+        font: 'Roboto',
+        fontStyle: 'bold'
+      },
+      alternateRowStyles: {
+        fillColor: [245, 245, 245]
+      },
+      didDrawPage: (data) => {
+        doc.setFontSize(8);
+        doc.setTextColor(150);
+        doc.setFont('Roboto', 'normal');
+        const pageSize = doc.internal.pageSize;
+        const pageHeight = pageSize.height ? pageSize.height : pageSize.getHeight();
+        doc.text(
+            `Strona ${data.pageNumber}`, 
+            data.settings.margin.left, 
+            pageHeight - 10
+        );
+      }
+    });
+
+    const fileName = `safegate_raport_${new Date().toISOString().slice(0,10)}.pdf`;
+    doc.save(fileName);
+  };
+
+  const handleGenerateFilteredPDF = async () => {
+    setPdfLoading(true);
+    try {
+        const startIso = new Date(pdfFilters.startDate).toISOString();
+        const rawLogs = await api.getLogs(startIso);
+
+        const endTimestamp = new Date(pdfFilters.endDate).getTime();
+        const filteredLogs = rawLogs.filter(log => {
+            const logTime = new Date(log.timestamp).getTime();
+            if (logTime > endTimestamp) return false;
+            if (pdfFilters.userId !== 'all') {
+                if (log.employee_id !== Number(pdfFilters.userId)) return false;
+            }
+            return true;
+        });
+
+        if (filteredLogs.length === 0) {
+            alert("Brak danych spełniających kryteria.");
+            setPdfLoading(false);
+            return;
+        }
+
+        const doc = new jsPDF('p', 'mm', 'a4');
+        
+        await applyPolishFont(doc);
+
+        doc.setFontSize(18);
+        doc.setFont('Roboto', 'bold');
+        doc.text('Raport logowań użytkowników', 14, 22);
+        
+        doc.setFont('Roboto', 'normal');
+        doc.setFontSize(10);
+        doc.setTextColor(100);
+        doc.text(`Wygenerowano: ${new Date().toLocaleString()}`, 14, 30);
+        doc.text(`Zakres: ${new Date(pdfFilters.startDate).toLocaleString()} - ${new Date(pdfFilters.endDate).toLocaleString()}`, 14, 35);
+        
+        if (pdfFilters.userId !== 'all') {
+            const userName = users.find(u => u.id === Number(pdfFilters.userId))?.full_name || 'Nieznany';
+            doc.text(`Użytkownik: ${userName}`, 14, 40);
+        } else {
+            doc.text(`Użytkownik: Wszyscy`, 14, 40);
+        }
+
+        const tableColumn = ["Data i Czas", "ID", "Pracownik", "Status", "Pewność (%)"];
+        const tableRows = filteredLogs.map(log => {
+            let statusText = log.status;
+            if (log.status === 'SUCCESS') statusText = 'Prawidłowe';
+            if (log.status === 'FACE_MISMATCH') statusText = 'Niezgodna twarz';
+            if (log.status === 'NO_FACE') statusText = 'Brak twarzy';
+            if (log.status === 'INVALID_QR') statusText = 'Błędny QR';
+
+            return [
+                new Date(log.timestamp).toLocaleString(),
+                log.employee_id || '-',
+                log.full_name || '-',
+                statusText,
+                log.confidence ? `${(log.confidence * 100).toFixed(1)}%` : '-'
+            ];
+        });
+
+        autoTable(doc, {
+            head: [tableColumn],
+            body: tableRows,
+            startY: 50,
+            theme: 'grid',
+            styles: { 
+                fontSize: 8, 
+                cellPadding: 3,
+                font: 'Roboto' 
+            },
+            headStyles: { 
+                fillColor: [41, 128, 185], 
+                textColor: 255, 
+                font: 'Roboto',
+                fontStyle: 'bold' // Teraz zadziała poprawnie z polskimi znakami
+            },
+            alternateRowStyles: { fillColor: [245, 245, 245] },
+            didDrawPage: (data) => {
+                doc.setFontSize(8);
+                doc.setTextColor(150);
+                doc.setFont('Roboto', 'normal');
+                const pageHeight = doc.internal.pageSize.getHeight();
+                doc.text(`Strona ${data.pageNumber}`, data.settings.margin.left, pageHeight - 10);
+            }
+        });
+
+        const fileName = `raport_${pdfFilters.userId === 'all' ? 'wszyscy' : 'user'}_${new Date().toISOString().slice(0,10)}.pdf`;
+        doc.save(fileName);
+        setIsPdfModalOpen(false);
+
+    } catch (error) {
+        console.error("PDF Error", error);
+        alert("Błąd podczas generowania raportu.");
+    } finally {
+        setPdfLoading(false);
+    }
+  };
+
   // --- Render ---
   if (!token) {
     return (
@@ -221,9 +441,20 @@ const AdminPage: React.FC = () => {
                     <label className="text-xs text-gray-500 block">Pokaż od</label>
                     <input type="datetime-local" className="border p-2 rounded text-sm" value={logSince} onChange={e => setLogSince(e.target.value)} />
                 </div>
-                <button onClick={fetchData} className="bg-gray-100 p-2 rounded hover:bg-gray-200">
+                <button onClick={fetchData} className="bg-gray-100 p-2 rounded hover:bg-gray-200" title="Odśwież">
                     <RefreshCw size={20} className={loading ? 'animate-spin' : ''} />
                 </button>
+                
+                {/* PDF BUTTON - OPEN MODAL */}
+                <button 
+                    onClick={() => setIsPdfModalOpen(true)} 
+                    className="bg-blue-600 text-white p-2 rounded hover:bg-blue-700 flex items-center gap-2 ml-2 shadow-sm transition-all"
+                    title="Generuj Raport PDF"
+                >
+                    <FileText size={20} />
+                    <span className="text-sm font-semibold">PDF</span>
+                </button>
+
                 <div className="border-l pl-4 ml-2">
                     <label className="text-xs text-red-500 block">Usuń starsze niż</label>
                     <div className="flex gap-2">
@@ -242,7 +473,7 @@ const AdminPage: React.FC = () => {
                     <th className="p-3">Pracownik</th>
                     <th className="p-3">Status / Powód</th>
                     <th className="p-3">Pewność</th>
-                    <th className="p-3 text-center">Dowód</th> {/* NOWA KOLUMNA */}
+                    <th className="p-3 text-center">Dowód</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y">
@@ -267,7 +498,6 @@ const AdminPage: React.FC = () => {
                           {log.confidence ? (log.confidence * 100).toFixed(1) + '%' : '-'}
                       </td>
                       <td className="p-3 text-center">
-                        {/* PRZYCISK DO POKAZANIA ZDJĘCIA */}
                         {log.captured_image ? (
                             <button 
                                 onClick={() => setViewImage(log.captured_image || null)}
@@ -289,7 +519,7 @@ const AdminPage: React.FC = () => {
           </div>
         )}
 
-        {/* --- USERS TAB (Tu bez zmian) --- */}
+        {/* --- USERS TAB --- */}
         {activeTab === 'USERS' && (
           <div className="bg-white rounded shadow p-6">
             <div className="flex justify-between items-center mb-6">
@@ -345,7 +575,7 @@ const AdminPage: React.FC = () => {
         )}
       </main>
 
-      {/* --- Image Preview Modal (NOWOŚĆ) --- */}
+      {/* --- Image Preview Modal --- */}
       {viewImage && (
         <div 
             className="fixed inset-0 bg-black/90 flex items-center justify-center z-50 animate-in fade-in duration-200" 
@@ -363,8 +593,71 @@ const AdminPage: React.FC = () => {
                 >
                     <X size={32} />
                 </button>
-                <div className="mt-2 text-center text-gray-400 text-sm">
-                    Kliknij w tło, aby zamknąć
+            </div>
+        </div>
+      )}
+
+      {/* --- PDF Filter Modal --- */}
+      {isPdfModalOpen && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+            <div className="bg-white p-6 rounded shadow-lg w-96">
+                <div className="flex justify-between items-center mb-4">
+                    <h3 className="text-lg font-bold flex items-center gap-2">
+                        <FileText className="text-blue-600" /> Generuj Raport PDF
+                    </h3>
+                    <button onClick={() => setIsPdfModalOpen(false)} className="text-gray-400 hover:text-gray-600">
+                        <X size={20} />
+                    </button>
+                </div>
+
+                <div className="space-y-4">
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Pracownik</label>
+                        <select 
+                            className="w-full border p-2 rounded"
+                            value={pdfFilters.userId}
+                            onChange={(e) => setPdfFilters({...pdfFilters, userId: e.target.value})}
+                        >
+                            <option value="all">Wszyscy użytkownicy</option>
+                            {users.map(u => (
+                                <option key={u.id} value={u.id}>{u.full_name} (ID: {u.id})</option>
+                            ))}
+                        </select>
+                    </div>
+
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Data od</label>
+                        <input 
+                            type="datetime-local" 
+                            className="w-full border p-2 rounded"
+                            value={pdfFilters.startDate}
+                            onChange={(e) => setPdfFilters({...pdfFilters, startDate: e.target.value})}
+                        />
+                    </div>
+
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Data do</label>
+                        <input 
+                            type="datetime-local" 
+                            className="w-full border p-2 rounded"
+                            value={pdfFilters.endDate}
+                            onChange={(e) => setPdfFilters({...pdfFilters, endDate: e.target.value})}
+                        />
+                    </div>
+                </div>
+
+                <div className="mt-6 flex justify-end gap-2">
+                    <button onClick={() => setIsPdfModalOpen(false)} className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded">
+                        Anuluj
+                    </button>
+                    <button 
+                        onClick={handleGenerateFilteredPDF} 
+                        disabled={pdfLoading}
+                        className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 flex items-center gap-2 disabled:bg-blue-300"
+                    >
+                        {pdfLoading ? <RefreshCw className="animate-spin" size={16} /> : <Download size={16} />}
+                        Generuj
+                    </button>
                 </div>
             </div>
         </div>
@@ -392,7 +685,7 @@ const AdminPage: React.FC = () => {
         </div>
       )}
 
-      {/* --- User History Modal (POPRAWIONE SCROLLOWANIE) --- */}
+      {/* --- User History Modal --- */}
       {selectedHistoryUser && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 animate-in fade-in duration-200">
             <div className="bg-white p-6 rounded-lg shadow-xl w-full max-w-lg max-h-[80vh] flex flex-col">
