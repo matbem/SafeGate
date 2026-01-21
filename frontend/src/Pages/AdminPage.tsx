@@ -28,13 +28,18 @@ const getStatusBadge = (status: string) => {
   }
 };
 
+// Rozszerzenie typu dla AccessLog, aby obsłużyć qr_content (zakładając, że backend to zwraca przy błędzie)
+interface ExtendedAccessLog extends AccessLog {
+    qr_content?: string;
+}
+
 const AdminPage: React.FC = () => {
   const [token, setToken] = useState<string | null>(localStorage.getItem('token'));
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [activeTab, setActiveTab] = useState<'LOGS' | 'USERS'>('LOGS');
   
-  const [logs, setLogs] = useState<AccessLog[]>([]);
+  const [logs, setLogs] = useState<ExtendedAccessLog[]>([]);
   const [users, setUsers] = useState<Employee[]>([]);
   const [loading, setLoading] = useState(false);
   const [logSince, setLogSince] = useState(new Date(Date.now() - 86400000).toISOString().slice(0, 16));
@@ -303,6 +308,7 @@ const AdminPage: React.FC = () => {
             doc.text(`Użytkownik: Wszyscy`, 14, 40);
         }
 
+        // KOLUMNY PDF
         const tableColumn = ["Data i Czas", "ID", "Pracownik", "Status", "Pewność (%)"];
         const tableRows = filteredLogs.map(log => {
             let statusText = log.status;
@@ -311,10 +317,17 @@ const AdminPage: React.FC = () => {
             if (log.status === 'NO_FACE') statusText = 'Brak twarzy';
             if (log.status === 'INVALID_QR') statusText = 'Błędny QR';
 
+            // Logika dla wyświetlania pracownika w PDF
+            let employeeDisplay = log.full_name || '-';
+            // Jeśli mamy błędny QR i treść
+            if (log.status === 'INVALID_QR' && (log as ExtendedAccessLog).qr_content) {
+                employeeDisplay = `QR: ${(log as ExtendedAccessLog).qr_content}`;
+            }
+
             return [
                 new Date(log.timestamp).toLocaleString(),
-                log.employee_id || '-',
-                log.full_name || '-',
+                log.employee_id || '-', // ID w osobnej kolumnie
+                employeeDisplay,
                 statusText,
                 log.confidence ? `${(log.confidence * 100).toFixed(1)}%` : '-'
             ];
@@ -351,10 +364,8 @@ const AdminPage: React.FC = () => {
 
   // --- PDF GENERATION: SINGLE USER FULL HISTORY ---
   const handleGenerateHistoryPDF = async (user: Employee) => {
-      // Używamy stanu pdfLoading dla feedbacku (można dodać dedykowany stan)
       setPdfLoading(true); 
       try {
-          // Pobieramy "wszystkie" wpisy (limit 10000 powinien pokryć całą historię)
           const fullHistory = await api.getEmployeeHistory(user.id, 10000);
 
           if (fullHistory.length === 0) {
@@ -385,7 +396,6 @@ const AdminPage: React.FC = () => {
               if (log.status === 'NO_FACE') statusText = 'Brak twarzy';
               if (log.status === 'INVALID_QR') statusText = 'Błędny QR';
               
-              // Dodatkowe info w szczegółach (np. czy zapisano zdjęcie)
               const details = log.captured_image ? "Zdjęcie zapisane" : "-";
 
               return [
@@ -497,6 +507,7 @@ const AdminPage: React.FC = () => {
                 <thead className="bg-gray-100 uppercase text-gray-600">
                   <tr>
                     <th className="p-3">Data i Godzina</th>
+                    <th className="p-3">ID</th> {/* NOWA KOLUMNA */}
                     <th className="p-3">Pracownik</th>
                     <th className="p-3">Status / Powód</th>
                     <th className="p-3">Pewność</th>
@@ -509,13 +520,22 @@ const AdminPage: React.FC = () => {
                       <td className="p-3 font-mono text-gray-600">
                           {new Date(log.timestamp).toLocaleString()}
                       </td>
+                      {/* NOWA KOLUMNA ID */}
+                      <td className="p-3 font-mono text-gray-500 font-bold">
+                          {log.employee_id ? `${log.employee_id}` : '-'}
+                      </td>
                       <td className="p-3 font-medium">
                           {log.status === 'INVALID_QR' ? (
-                              <span className="text-red-500 font-mono text-xs" title="Błędny kod QR">
-                                BŁĄD: {log.qr_content || 'Brak danych'}
-                              </span>
+                              <div className="flex flex-col">
+                                  <span className="text-red-600 font-bold text-xs flex items-center gap-1">
+                                    <AlertTriangle size={12}/> NIEPRAWIDŁOWY QR
+                                  </span>
+                                  <span className="text-gray-500 font-mono text-[10px] bg-gray-50 p-1 rounded border break-all max-w-[250px] mt-1" title="Odebrana treść kodu">
+                                    {log.qr_content || '(brak danych)'}
+                                  </span>
+                              </div>
                           ) : (
-                              log.full_name || `ID: ${log.employee_id}` || '-'
+                              log.full_name || '-'
                           )}
                       </td>
                       <td className="p-3">
@@ -539,7 +559,7 @@ const AdminPage: React.FC = () => {
                       </td>
                     </tr>
                   ))}
-                  {logs.length === 0 && <tr><td colSpan={5} className="p-4 text-center text-gray-500">Brak logów.</td></tr>}
+                  {logs.length === 0 && <tr><td colSpan={6} className="p-4 text-center text-gray-500">Brak logów.</td></tr>}
                 </tbody>
               </table>
             </div>
@@ -571,7 +591,7 @@ const AdminPage: React.FC = () => {
                 <tbody className="divide-y">
                   {users.map((user) => (
                     <tr key={user.id} className="hover:bg-gray-50">
-                      <td className="p-3 text-gray-500">{user.id}</td>
+                      <td className="p-3 text-gray-500 font-mono">{user.id}</td>
                       <td className="p-3 font-medium text-gray-900">{user.full_name}</td>
                       <td className="p-3">
                         {user.reference_photo_base64 ? (
@@ -753,7 +773,12 @@ const AdminPage: React.FC = () => {
               <X size={20} />
             </button>
             <h3 className="text-xl font-bold mb-2 text-gray-800">Kod QR</h3>
-            <p className="text-sm text-gray-500 mb-6">{selectedQrUser.full_name}</p>
+            <p className="text-sm text-gray-500 mb-6 flex items-center gap-2">
+                {selectedQrUser.full_name}
+                <span className="bg-gray-100 px-2 py-0.5 rounded text-xs font-mono text-gray-600 border border-gray-200">
+                    ID: {selectedQrUser.id}
+                </span>
+            </p>
             <div className="p-4 bg-white border-2 border-gray-100 rounded-xl shadow-inner mb-6">
                <QRCodeCanvas id="qr-code-modal" value={selectedQrUser.qr_token || ""} size={256} level={"H"} includeMargin={true} />
             </div>
