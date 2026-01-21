@@ -28,3 +28,11 @@ class AccessLogRead(BaseModel):
 
     class Config:
         from_attributes = True
+
+class CheckQrRequest(BaseModel):
+    qr_token: str
+
+class CheckQrResponse(BaseModel):
+    valid: bool
+    message: str
+    employee_name: str | None = None

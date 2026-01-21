@@ -109,5 +109,10 @@ export const api = {
     const payload: PruneLogsRequest = { cutoff_date: cutoffDate, confirm: true };
     const response = await apiClient.delete<PruneLogsResponse>('/admin/logs/prune', { data: payload });
     return response.data;
+  },
+
+  checkQr: async (qrToken: string): Promise<CheckQrResponse> => {
+      const response = await apiClient.post<CheckQrResponse>('/access/check-qr', { qr_token: qrToken });
+      return response.data;
   }
 };

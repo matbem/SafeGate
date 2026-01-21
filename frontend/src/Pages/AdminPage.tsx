@@ -4,8 +4,8 @@ import type { Employee, AccessLog } from '../types';
 import { 
     LogOut, Users, FileText, Trash2, Plus, RefreshCw, 
     History, ShieldAlert, Upload, X, Download, QrCode, 
-    Image as ImageIcon, AlertTriangle, CheckCircle 
-} from 'lucide-react'; // Dodano AlertTriangle i CheckCircle
+    Image as ImageIcon, AlertTriangle 
+} from 'lucide-react';
 import { QRCodeCanvas } from 'qrcode.react';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
@@ -44,7 +44,6 @@ const AdminPage: React.FC = () => {
   const [selectedQrUser, setSelectedQrUser] = useState<Employee | null>(null);
   const [selectedHistoryUser, setSelectedHistoryUser] = useState<Employee | null>(null);
   
-  // --- NOWY STAN DLA MODALA REGENERACJI ---
   const [regenerateTarget, setRegenerateTarget] = useState<Employee | null>(null);
   const [isRegenerating, setIsRegenerating] = useState(false);
   
@@ -185,14 +184,10 @@ const AdminPage: React.FC = () => {
     }
   };
 
-  // --- LOGIKA REGENERACJI Z MODALEM ---
-  
-  // 1. Otwarcie modala (zamiast window.confirm)
   const openRegenerateModal = (user: Employee) => {
       setRegenerateTarget(user);
   };
 
-  // 2. Wykonanie akcji po potwierdzeniu w modalu
   const confirmRegeneration = async () => {
     if (!regenerateTarget) return;
     
@@ -201,14 +196,12 @@ const AdminPage: React.FC = () => {
         const result = await api.regenerateUserQR(regenerateTarget.id);
         
         if (result.success) {
-            // Optimistic UI update - aktualizacja listy bez przeładowania
             setUsers(prevUsers => prevUsers.map(user => 
                 user.id === regenerateTarget.id 
                 ? { ...user, qr_token: result.new_qr_token, qr_valid_until: result.qr_valid_until } 
                 : user
             ));
             
-            // Zamknięcie modala
             setRegenerateTarget(null);
         }
     } catch (error) {
@@ -267,76 +260,7 @@ const AdminPage: React.FC = () => {
     }
   };
 
-  // --- PDF GENERATION ---
-  const generatePDF = async () => {
-    const doc = new jsPDF('p', 'mm', 'a4');
-
-    await applyPolishFont(doc);
-
-    doc.setFontSize(18);
-    doc.setFont('Roboto', 'bold');
-    doc.text('Raport logowania użytkowników', 14, 22);
-    
-    doc.setFont('Roboto', 'normal');
-    doc.setFontSize(10);
-    doc.setTextColor(100);
-    doc.text(`Wygenerowano: ${new Date().toLocaleString()}`, 14, 30);
-    doc.text(`Zakres danych od: ${new Date(logSince).toLocaleString()}`, 14, 35);
-
-    const tableColumn = ["Data i Czas", "ID", "Pracownik", "Status", "Pewność (%)"];
-    const tableRows = logs.map(log => {
-      let statusText = log.status;
-      if (log.status === 'SUCCESS') statusText = 'Prawidłowe';
-      if (log.status === 'FACE_MISMATCH') statusText = 'Niezgodna twarz';
-      if (log.status === 'NO_FACE') statusText = 'Brak twarzy';
-      if (log.status === 'INVALID_QR') statusText = 'Błędny QR';
-
-      return [
-        new Date(log.timestamp).toLocaleString(),
-        log.employee_id || '-',
-        log.full_name || '-',
-        statusText,
-        log.confidence ? `${(log.confidence * 100).toFixed(1)}%` : '-'
-      ];
-    });
-
-    autoTable(doc, {
-      head: [tableColumn],
-      body: tableRows,
-      startY: 40,
-      theme: 'grid',
-      styles: {
-        fontSize: 8,
-        cellPadding: 3,
-        font: 'Roboto',
-      },
-      headStyles: {
-        fillColor: [41, 128, 185],
-        textColor: 255,
-        font: 'Roboto',
-        fontStyle: 'bold'
-      },
-      alternateRowStyles: {
-        fillColor: [245, 245, 245]
-      },
-      didDrawPage: (data) => {
-        doc.setFontSize(8);
-        doc.setTextColor(150);
-        doc.setFont('Roboto', 'normal');
-        const pageSize = doc.internal.pageSize;
-        const pageHeight = pageSize.height ? pageSize.height : pageSize.getHeight();
-        doc.text(
-            `Strona ${data.pageNumber}`, 
-            data.settings.margin.left, 
-            pageHeight - 10
-        );
-      }
-    });
-
-    const fileName = `safegate_raport_${new Date().toISOString().slice(0,10)}.pdf`;
-    doc.save(fileName);
-  };
-
+  // --- PDF GENERATION: GLOBAL ---
   const handleGenerateFilteredPDF = async () => {
     setPdfLoading(true);
     try {
@@ -360,7 +284,6 @@ const AdminPage: React.FC = () => {
         }
 
         const doc = new jsPDF('p', 'mm', 'a4');
-        
         await applyPolishFont(doc);
 
         doc.setFontSize(18);
@@ -402,17 +325,8 @@ const AdminPage: React.FC = () => {
             body: tableRows,
             startY: 50,
             theme: 'grid',
-            styles: { 
-                fontSize: 8, 
-                cellPadding: 3,
-                font: 'Roboto' 
-            },
-            headStyles: { 
-                fillColor: [41, 128, 185], 
-                textColor: 255, 
-                font: 'Roboto',
-                fontStyle: 'bold'
-            },
+            styles: { fontSize: 8, cellPadding: 3, font: 'Roboto' },
+            headStyles: { fillColor: [41, 128, 185], textColor: 255, font: 'Roboto', fontStyle: 'bold' },
             alternateRowStyles: { fillColor: [245, 245, 245] },
             didDrawPage: (data) => {
                 doc.setFontSize(8);
@@ -435,6 +349,82 @@ const AdminPage: React.FC = () => {
     }
   };
 
+  // --- PDF GENERATION: SINGLE USER FULL HISTORY ---
+  const handleGenerateHistoryPDF = async (user: Employee) => {
+      // Używamy stanu pdfLoading dla feedbacku (można dodać dedykowany stan)
+      setPdfLoading(true); 
+      try {
+          // Pobieramy "wszystkie" wpisy (limit 10000 powinien pokryć całą historię)
+          const fullHistory = await api.getEmployeeHistory(user.id, 10000);
+
+          if (fullHistory.length === 0) {
+              alert("Brak historii dla tego użytkownika.");
+              setPdfLoading(false);
+              return;
+          }
+
+          const doc = new jsPDF('p', 'mm', 'a4');
+          await applyPolishFont(doc);
+
+          doc.setFontSize(18);
+          doc.setFont('Roboto', 'bold');
+          doc.text(`Raport historii: ${user.full_name}`, 14, 22);
+          
+          doc.setFont('Roboto', 'normal');
+          doc.setFontSize(10);
+          doc.setTextColor(100);
+          doc.text(`Wygenerowano: ${new Date().toLocaleString()}`, 14, 30);
+          doc.text(`ID Pracownika: ${user.id}`, 14, 35);
+          doc.text(`Zakres: Pełna historia`, 14, 40);
+
+          const tableColumn = ["Data i Czas", "Status", "Pewność (%)", "Szczegóły"];
+          const tableRows = fullHistory.map(log => {
+              let statusText = log.status;
+              if (log.status === 'SUCCESS') statusText = 'Prawidłowe';
+              if (log.status === 'FACE_MISMATCH') statusText = 'Niezgodna twarz';
+              if (log.status === 'NO_FACE') statusText = 'Brak twarzy';
+              if (log.status === 'INVALID_QR') statusText = 'Błędny QR';
+              
+              // Dodatkowe info w szczegółach (np. czy zapisano zdjęcie)
+              const details = log.captured_image ? "Zdjęcie zapisane" : "-";
+
+              return [
+                  new Date(log.timestamp).toLocaleString(),
+                  statusText,
+                  log.confidence ? `${(log.confidence * 100).toFixed(1)}%` : '-',
+                  details
+              ];
+          });
+
+          autoTable(doc, {
+              head: [tableColumn],
+              body: tableRows,
+              startY: 50,
+              theme: 'grid',
+              styles: { fontSize: 8, cellPadding: 3, font: 'Roboto' },
+              headStyles: { fillColor: [41, 128, 185], textColor: 255, font: 'Roboto', fontStyle: 'bold' },
+              alternateRowStyles: { fillColor: [245, 245, 245] },
+              didDrawPage: (data) => {
+                  doc.setFontSize(8);
+                  doc.setTextColor(150);
+                  doc.setFont('Roboto', 'normal');
+                  const pageHeight = doc.internal.pageSize.getHeight();
+                  doc.text(`Strona ${data.pageNumber}`, data.settings.margin.left, pageHeight - 10);
+              }
+          });
+
+          const fileName = `historia_${user.full_name.replace(/\s+/g, '_')}_${new Date().toISOString().slice(0,10)}.pdf`;
+          doc.save(fileName);
+
+      } catch (error) {
+          console.error("User History PDF Error", error);
+          alert("Nie udało się pobrać pełnej historii i wygenerować PDF.");
+      } finally {
+          setPdfLoading(false);
+      }
+  };
+
+  // --- Render ---
   if (!token) {
     return (
       <div className="min-h-screen bg-gray-100 flex items-center justify-center">
@@ -596,7 +586,6 @@ const AdminPage: React.FC = () => {
                         <button onClick={() => setSelectedQrUser(user)} className="text-purple-600 hover:bg-purple-50 p-2 rounded" title="Kod QR">
                             <QrCode size={18} />
                         </button>
-                        {/* Zaktualizowany handler do otwierania modala */}
                         <button 
                             onClick={() => openRegenerateModal(user)} 
                             className="text-indigo-600 hover:bg-indigo-50 p-2 rounded" 
@@ -778,22 +767,37 @@ const AdminPage: React.FC = () => {
         </div>
       )}
 
-      {/* --- User History Modal --- */}
+      {/* --- User History Modal (SZERSZY I Z PDF) --- */}
       {selectedHistoryUser && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 animate-in fade-in duration-200">
-            <div className="bg-white p-6 rounded-lg shadow-xl w-full max-w-lg max-h-[80vh] flex flex-col">
+            {/* Zmiana szerokości na max-w-4xl */}
+            <div className="bg-white p-6 rounded-lg shadow-xl w-full max-w-4xl max-h-[80vh] flex flex-col">
                 <div className="flex justify-between items-center mb-4 border-b pb-4 shrink-0">
-                    <h3 className="text-xl font-bold flex items-center gap-2">
-                        <History size={24} className="text-blue-600" />
-                        Historia pracownika
-                    </h3>
-                    <button onClick={() => setSelectedHistoryUser(null)} className="text-gray-400 hover:text-gray-600">
-                        <X size={24} />
-                    </button>
-                </div>
-                <div className="mb-4 shrink-0">
-                    <p className="text-lg font-medium">{selectedHistoryUser.full_name}</p>
-                    <p className="text-xs text-gray-400 font-mono">ID: {selectedHistoryUser.id}</p>
+                    <div className="flex items-center gap-4">
+                        <h3 className="text-xl font-bold flex items-center gap-2">
+                            <History size={24} className="text-blue-600" />
+                            Historia pracownika
+                        </h3>
+                        <div className="border-l pl-4">
+                            <p className="text-lg font-medium leading-tight">{selectedHistoryUser.full_name}</p>
+                            <p className="text-xs text-gray-400 font-mono">ID: {selectedHistoryUser.id}</p>
+                        </div>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                        {/* PRZYCISK PDF W NAGŁÓWKU */}
+                        <button 
+                            onClick={() => handleGenerateHistoryPDF(selectedHistoryUser)}
+                            className="bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1.5 rounded text-sm font-medium flex items-center gap-2 shadow-sm transition-colors"
+                            title="Pobierz pełną historię jako PDF"
+                        >
+                            <Download size={16} /> Pobierz Raport
+                        </button>
+
+                        <button onClick={() => setSelectedHistoryUser(null)} className="text-gray-400 hover:text-gray-600 p-1">
+                            <X size={24} />
+                        </button>
+                    </div>
                 </div>
 
                 <div className="flex-1 overflow-y-auto min-h-0 border rounded bg-gray-50">
@@ -805,7 +809,7 @@ const AdminPage: React.FC = () => {
                         <div className="p-8 text-center text-gray-500">Brak wpisów.</div>
                     ) : (
                         <table className="w-full text-left text-sm">
-                            <thead className="bg-gray-100 uppercase text-gray-600 sticky top-0 shadow-sm">
+                            <thead className="bg-gray-100 uppercase text-gray-600 sticky top-0 shadow-sm z-10">
                                 <tr>
                                     <th className="p-3">Data i Czas</th>
                                     <th className="p-3">Status</th>

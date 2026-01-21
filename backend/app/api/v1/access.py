@@ -35,4 +35,17 @@ async def verify_access(data: AccessVerifyRequest,
         
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Błąd serwera: {str(e)}")
+
+from app.schemas.access import AccessVerifyRequest, AccessVerifyResponse, CheckQrRequest, CheckQrResponse # zaktualizuj import
+
+@router.post("/check-qr", response_model=CheckQrResponse)
+async def check_qr_validity(
+    data: CheckQrRequest,
+    access_service: AccessService = Depends(get_access_service)
+):
+    """
+    Endpoint: Pre-walidacja kodu QR (bez zdjęć).
+    """
+    result = await access_service.validate_qr_token(data.qr_token)
+    return CheckQrResponse(**result)
     

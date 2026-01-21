@@ -109,3 +109,9 @@ export interface PruneLogsResponse {
   deleted_count: number;
   message: string;
 }
+
+export interface CheckQrResponse {
+  valid: boolean;
+  message: string;
+  employee_name?: string;
+}

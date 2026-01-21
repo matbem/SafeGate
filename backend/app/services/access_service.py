@@ -121,3 +121,23 @@ class AccessService:
     
     async def get_history(self, employee_id: int, limit: int = 10):
         return await self.log_repo.get_employee_history(employee_id, limit)
+    
+    # Dodaj tę metodę do klasy AccessService
+    async def validate_qr_token(self, qr_token: str) -> dict:
+        """
+        Szybkie sprawdzenie czy kod QR istnieje i jest ważny.
+        Nie loguje próby wejścia, służy tylko do pre-walidacji.
+        """
+        user = await self.employee_repo.get_by_qr(qr_token)
+
+        if not user:
+            return {"valid": False, "message": "Nieznany kod QR"}
+        
+        if user['qr_valid_until'] < datetime.now(timezone.utc):
+            return {"valid": False, "message": "Kod QR wygasł"}
+
+        return {
+            "valid": True, 
+            "message": "Kod poprawny", 
+            "employee_name": user['full_name']
+        }
