@@ -36,6 +36,9 @@
             <li>
                     <a class="function" href="#verify_access">verify_access</a>
             </li>
+            <li>
+                    <a class="function" href="#check_qr_validity">check_qr_validity</a>
+            </li>
     </ul>
 
 
@@ -94,7 +97,20 @@
 </span><span id="L-35"><a href="#L-35"><span class="linenos">35</span></a>        
 </span><span id="L-36"><a href="#L-36"><span class="linenos">36</span></a>    <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
 </span><span id="L-37"><a href="#L-37"><span class="linenos">37</span></a>        <span class="k">raise</span> <span class="n">HTTPException</span><span class="p">(</span><span class="n">status_code</span><span class="o">=</span><span class="mi">500</span><span class="p">,</span> <span class="n">detail</span><span class="o">=</span><span class="sa">f</span><span class="s2">&quot;Błąd serwera: </span><span class="si">{</span><span class="nb">str</span><span class="p">(</span><span class="n">e</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
-</span><span id="L-38"><a href="#L-38"><span class="linenos">38</span></a>    
+</span><span id="L-38"><a href="#L-38"><span class="linenos">38</span></a>
+</span><span id="L-39"><a href="#L-39"><span class="linenos">39</span></a><span class="kn">from</span><span class="w"> </span><span class="nn">app.schemas.access</span><span class="w"> </span><span class="kn">import</span> <span class="n">AccessVerifyRequest</span><span class="p">,</span> <span class="n">AccessVerifyResponse</span><span class="p">,</span> <span class="n">CheckQrRequest</span><span class="p">,</span> <span class="n">CheckQrResponse</span> <span class="c1"># zaktualizuj import</span>
+</span><span id="L-40"><a href="#L-40"><span class="linenos">40</span></a>
+</span><span id="L-41"><a href="#L-41"><span class="linenos">41</span></a><span class="nd">@router</span><span class="o">.</span><span class="n">post</span><span class="p">(</span><span class="s2">&quot;/check-qr&quot;</span><span class="p">,</span> <span class="n">response_model</span><span class="o">=</span><span class="n">CheckQrResponse</span><span class="p">)</span>
+</span><span id="L-42"><a href="#L-42"><span class="linenos">42</span></a><span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">check_qr_validity</span><span class="p">(</span>
+</span><span id="L-43"><a href="#L-43"><span class="linenos">43</span></a>    <span class="n">data</span><span class="p">:</span> <span class="n">CheckQrRequest</span><span class="p">,</span>
+</span><span id="L-44"><a href="#L-44"><span class="linenos">44</span></a>    <span class="n">access_service</span><span class="p">:</span> <span class="n">AccessService</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_access_service</span><span class="p">)</span>
+</span><span id="L-45"><a href="#L-45"><span class="linenos">45</span></a><span class="p">):</span>
+</span><span id="L-46"><a href="#L-46"><span class="linenos">46</span></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+</span><span id="L-47"><a href="#L-47"><span class="linenos">47</span></a><span class="sd">    Endpoint: Pre-walidacja kodu QR (bez zdjęć).</span>
+</span><span id="L-48"><a href="#L-48"><span class="linenos">48</span></a><span class="sd">    &quot;&quot;&quot;</span>
+</span><span id="L-49"><a href="#L-49"><span class="linenos">49</span></a>    <span class="n">result</span> <span class="o">=</span> <span class="k">await</span> <span class="n">access_service</span><span class="o">.</span><span class="n">validate_qr_token</span><span class="p">(</span><span class="n">data</span><span class="o">.</span><span class="n">qr_token</span><span class="p">)</span>
+</span><span id="L-50"><a href="#L-50"><span class="linenos">50</span></a>    <span class="k">return</span> <span class="n">CheckQrResponse</span><span class="p">(</span><span class="o">**</span><span class="n">result</span><span class="p">)</span>
+</span><span id="L-51"><a href="#L-51"><span class="linenos">51</span></a>    
 </span></pre></div>
 
 
@@ -158,6 +174,36 @@
 
             <div class="docstring"><p>Endpoint: Weryfikacja wejścia
 Opis: Odbiera token QR i klatkę wideo, zwraca decyzję o otwarciu drzwi.</p>
+</div>
+
+
+                </section>
+                <section id="check_qr_validity">
+                            <input id="check_qr_validity-view-source" class="view-source-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
+<div class="attr function">
+                    <div class="decorator decorator-router.post">@router.post(&#39;/check-qr&#39;, response_model=CheckQrResponse)</div>
+
+        <span class="def">async def</span>
+        <span class="name">check_qr_validity</span><span class="signature pdoc-code multiline">(<span class="param">	<span class="n">data</span><span class="p">:</span> <span class="n"><a href="../../schemas/access.html#CheckQrRequest">app.schemas.access.CheckQrRequest</a></span>,</span><span class="param">	<span class="n">access_service</span><span class="p">:</span> <span class="n">app</span><span class="o">.</span><span class="n">services</span><span class="o">.</span><span class="n">access_service</span><span class="o">.</span><span class="n">AccessService</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">dependency</span><span class="o">=&lt;</span><span class="n">function</span> <span class="n">get_access_service</span><span class="o">&gt;</span><span class="p">,</span> <span class="n">use_cache</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">scope</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span></span><span class="return-annotation">):</span></span>
+
+                <label class="view-source-button" for="check_qr_validity-view-source"><span>View Source</span></label>
+
+    </div>
+    <a class="headerlink" href="#check_qr_validity"></a>
+            <div class="pdoc-code codehilite"><pre><span></span><span id="check_qr_validity-42"><a href="#check_qr_validity-42"><span class="linenos">42</span></a><span class="nd">@router</span><span class="o">.</span><span class="n">post</span><span class="p">(</span><span class="s2">&quot;/check-qr&quot;</span><span class="p">,</span> <span class="n">response_model</span><span class="o">=</span><span class="n">CheckQrResponse</span><span class="p">)</span>
+</span><span id="check_qr_validity-43"><a href="#check_qr_validity-43"><span class="linenos">43</span></a><span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">check_qr_validity</span><span class="p">(</span>
+</span><span id="check_qr_validity-44"><a href="#check_qr_validity-44"><span class="linenos">44</span></a>    <span class="n">data</span><span class="p">:</span> <span class="n">CheckQrRequest</span><span class="p">,</span>
+</span><span id="check_qr_validity-45"><a href="#check_qr_validity-45"><span class="linenos">45</span></a>    <span class="n">access_service</span><span class="p">:</span> <span class="n">AccessService</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_access_service</span><span class="p">)</span>
+</span><span id="check_qr_validity-46"><a href="#check_qr_validity-46"><span class="linenos">46</span></a><span class="p">):</span>
+</span><span id="check_qr_validity-47"><a href="#check_qr_validity-47"><span class="linenos">47</span></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+</span><span id="check_qr_validity-48"><a href="#check_qr_validity-48"><span class="linenos">48</span></a><span class="sd">    Endpoint: Pre-walidacja kodu QR (bez zdjęć).</span>
+</span><span id="check_qr_validity-49"><a href="#check_qr_validity-49"><span class="linenos">49</span></a><span class="sd">    &quot;&quot;&quot;</span>
+</span><span id="check_qr_validity-50"><a href="#check_qr_validity-50"><span class="linenos">50</span></a>    <span class="n">result</span> <span class="o">=</span> <span class="k">await</span> <span class="n">access_service</span><span class="o">.</span><span class="n">validate_qr_token</span><span class="p">(</span><span class="n">data</span><span class="o">.</span><span class="n">qr_token</span><span class="p">)</span>
+</span><span id="check_qr_validity-51"><a href="#check_qr_validity-51"><span class="linenos">51</span></a>    <span class="k">return</span> <span class="n">CheckQrResponse</span><span class="p">(</span><span class="o">**</span><span class="n">result</span><span class="p">)</span>
+</span></pre></div>
+
+
+            <div class="docstring"><p>Endpoint: Pre-walidacja kodu QR (bez zdjęć).</p>
 </div>
 
 

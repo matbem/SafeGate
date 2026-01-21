@@ -28,9 +28,10 @@ const getStatusBadge = (status: string) => {
   }
 };
 
-// Rozszerzenie typu dla AccessLog, aby obsłużyć qr_content (zakładając, że backend to zwraca przy błędzie)
+// Rozszerzenie typu dla AccessLog, aby obsłużyć qr_content i captured_image
 interface ExtendedAccessLog extends AccessLog {
     qr_content?: string;
+    captured_image?: string;
 }
 
 const AdminPage: React.FC = () => {
@@ -107,7 +108,7 @@ const AdminPage: React.FC = () => {
       } else {
         const fullIsoDate = new Date(logSince).toISOString();
         const data = await api.getLogs(fullIsoDate);
-        setLogs(data);
+        setLogs(data as ExtendedAccessLog[]);
       }
     } catch (error) {
       console.error(error);
@@ -319,9 +320,11 @@ const AdminPage: React.FC = () => {
 
             // Logika dla wyświetlania pracownika w PDF
             let employeeDisplay = log.full_name || '-';
-            // Jeśli mamy błędny QR i treść
-            if (log.status === 'INVALID_QR' && (log as ExtendedAccessLog).qr_content) {
-                employeeDisplay = `QR: ${(log as ExtendedAccessLog).qr_content}`;
+            // Rzutowanie na ExtendedAccessLog, żeby TS nie krzyczał o qr_content
+            const extendedLog = log as ExtendedAccessLog;
+            
+            if (log.status === 'INVALID_QR' && extendedLog.qr_content) {
+                employeeDisplay = `QR: ${extendedLog.qr_content}`;
             }
 
             return [
@@ -396,7 +399,8 @@ const AdminPage: React.FC = () => {
               if (log.status === 'NO_FACE') statusText = 'Brak twarzy';
               if (log.status === 'INVALID_QR') statusText = 'Błędny QR';
               
-              const details = log.captured_image ? "Zdjęcie zapisane" : "-";
+              const extendedLog = log as ExtendedAccessLog;
+              const details = extendedLog.captured_image ? "Zdjęcie zapisane" : "-";
 
               return [
                   new Date(log.timestamp).toLocaleString(),
@@ -504,15 +508,9 @@ const AdminPage: React.FC = () => {
 
             <div className="overflow-x-auto">
               <table className="w-full text-left text-sm">
+                {/* POPRAWIONA SEKCJA THEAD - BEZ SPACJI MIĘDZY TAGAMI */}
                 <thead className="bg-gray-100 uppercase text-gray-600">
-                  <tr>
-                    <th className="p-3">Data i Godzina</th>
-                    <th className="p-3">ID</th> {/* NOWA KOLUMNA */}
-                    <th className="p-3">Pracownik</th>
-                    <th className="p-3">Status / Powód</th>
-                    <th className="p-3">Pewność</th>
-                    <th className="p-3 text-center">Dowód</th>
-                  </tr>
+                  <tr><th className="p-3">Data i Godzina</th><th className="p-3">ID</th><th className="p-3">Pracownik</th><th className="p-3">Status / Powód</th><th className="p-3">Pewność</th><th className="p-3 text-center">Dowód</th></tr>
                 </thead>
                 <tbody className="divide-y">
                   {logs.map((log) => (
@@ -520,18 +518,14 @@ const AdminPage: React.FC = () => {
                       <td className="p-3 font-mono text-gray-600">
                           {new Date(log.timestamp).toLocaleString()}
                       </td>
-                      {/* NOWA KOLUMNA ID */}
                       <td className="p-3 font-mono text-gray-500 font-bold">
                           {log.employee_id ? `${log.employee_id}` : '-'}
                       </td>
                       <td className="p-3 font-medium">
                           {log.status === 'INVALID_QR' ? (
                               <div className="flex flex-col">
-                                  <span className="text-red-600 font-bold text-xs flex items-center gap-1">
-                                    <AlertTriangle size={12}/> NIEPRAWIDŁOWY QR
-                                  </span>
-                                  <span className="text-gray-500 font-mono text-[10px] bg-gray-50 p-1 rounded border break-all max-w-[250px] mt-1" title="Odebrana treść kodu">
-                                    {log.qr_content || '(brak danych)'}
+                                  <span className="text-gray-500" title="Odebrana treść kodu">
+                                    { `błędny QR: ${log.qr_content || '(brak danych)'}`}
                                   </span>
                               </div>
                           ) : (

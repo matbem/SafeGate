@@ -54,6 +54,9 @@
             <li>
                     <a class="function" href="#prune_logs">prune_logs</a>
             </li>
+            <li>
+                    <a class="function" href="#regenerate_user_qr">regenerate_user_qr</a>
+            </li>
     </ul>
 
 
@@ -218,6 +221,23 @@
 </span><span id="L-141"><a href="#L-141"><span class="linenos">141</span></a>        <span class="n">deleted_count</span><span class="o">=</span><span class="n">result</span><span class="p">[</span><span class="s2">&quot;deleted_count&quot;</span><span class="p">],</span>
 </span><span id="L-142"><a href="#L-142"><span class="linenos">142</span></a>        <span class="n">message</span><span class="o">=</span><span class="sa">f</span><span class="s2">&quot;Successfully deleted </span><span class="si">{</span><span class="n">result</span><span class="p">[</span><span class="s1">&#39;deleted_count&#39;</span><span class="p">]</span><span class="si">}</span><span class="s2"> logs older than </span><span class="si">{</span><span class="n">payload</span><span class="o">.</span><span class="n">cutoff_date</span><span class="si">}</span><span class="s2">.&quot;</span>
 </span><span id="L-143"><a href="#L-143"><span class="linenos">143</span></a>    <span class="p">)</span>
+</span><span id="L-144"><a href="#L-144"><span class="linenos">144</span></a>
+</span><span id="L-145"><a href="#L-145"><span class="linenos">145</span></a><span class="nd">@router</span><span class="o">.</span><span class="n">post</span><span class="p">(</span><span class="s2">&quot;/users/</span><span class="si">{user_id}</span><span class="s2">/regenerate-qr&quot;</span><span class="p">,</span> <span class="n">status_code</span><span class="o">=</span><span class="mi">200</span><span class="p">)</span>
+</span><span id="L-146"><a href="#L-146"><span class="linenos">146</span></a><span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">regenerate_user_qr</span><span class="p">(</span>
+</span><span id="L-147"><a href="#L-147"><span class="linenos">147</span></a>    <span class="n">user_id</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> 
+</span><span id="L-148"><a href="#L-148"><span class="linenos">148</span></a>    <span class="n">user_service</span><span class="o">=</span><span class="n">Depends</span><span class="p">(</span><span class="n">get_user_service</span><span class="p">)</span>
+</span><span id="L-149"><a href="#L-149"><span class="linenos">149</span></a><span class="p">):</span>
+</span><span id="L-150"><a href="#L-150"><span class="linenos">150</span></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+</span><span id="L-151"><a href="#L-151"><span class="linenos">151</span></a><span class="sd">    Endpoint: Wymusza generację nowego QR tokena dla pracownika.</span>
+</span><span id="L-152"><a href="#L-152"><span class="linenos">152</span></a><span class="sd">    Poprzedni kod QR traci ważność (zwróci INVALID_QR przy próbie użycia).</span>
+</span><span id="L-153"><a href="#L-153"><span class="linenos">153</span></a><span class="sd">    &quot;&quot;&quot;</span>
+</span><span id="L-154"><a href="#L-154"><span class="linenos">154</span></a>    <span class="n">result</span> <span class="o">=</span> <span class="k">await</span> <span class="n">user_service</span><span class="o">.</span><span class="n">regenerate_qr_token</span><span class="p">(</span><span class="n">user_id</span><span class="p">)</span>
+</span><span id="L-155"><a href="#L-155"><span class="linenos">155</span></a>    
+</span><span id="L-156"><a href="#L-156"><span class="linenos">156</span></a>    <span class="k">if</span> <span class="ow">not</span> <span class="n">result</span><span class="p">[</span><span class="s2">&quot;success&quot;</span><span class="p">]:</span>
+</span><span id="L-157"><a href="#L-157"><span class="linenos">157</span></a>        <span class="c1"># Zwracamy 404 jeśli użytkownik nie istnieje, lub 400 przy błędzie bazy</span>
+</span><span id="L-158"><a href="#L-158"><span class="linenos">158</span></a>        <span class="k">raise</span> <span class="n">HTTPException</span><span class="p">(</span><span class="n">status_code</span><span class="o">=</span><span class="mi">404</span><span class="p">,</span> <span class="n">detail</span><span class="o">=</span><span class="n">result</span><span class="p">[</span><span class="s2">&quot;errors&quot;</span><span class="p">])</span>
+</span><span id="L-159"><a href="#L-159"><span class="linenos">159</span></a>        
+</span><span id="L-160"><a href="#L-160"><span class="linenos">160</span></a>    <span class="k">return</span> <span class="n">result</span>
 </span></pre></div>
 
 
@@ -528,6 +548,43 @@ Parameters:</p>
 Returns:</li>
 <li>PruneLogsResponse: response indicating success/failure and details</li>
 </ul>
+</div>
+
+
+                </section>
+                <section id="regenerate_user_qr">
+                            <input id="regenerate_user_qr-view-source" class="view-source-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
+<div class="attr function">
+                    <div class="decorator decorator-router.post">@router.post(&#39;/users/{user_id}/regenerate-qr&#39;, status_code=200)</div>
+
+        <span class="def">async def</span>
+        <span class="name">regenerate_user_qr</span><span class="signature pdoc-code multiline">(<span class="param">	<span class="n">user_id</span><span class="p">:</span> <span class="nb">int</span>,</span><span class="param">	<span class="n">user_service</span><span class="o">=</span><span class="n">Depends</span><span class="p">(</span><span class="n">dependency</span><span class="o">=&lt;</span><span class="n">function</span> <span class="n">get_user_service</span><span class="o">&gt;</span><span class="p">,</span> <span class="n">use_cache</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">scope</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span></span><span class="return-annotation">):</span></span>
+
+                <label class="view-source-button" for="regenerate_user_qr-view-source"><span>View Source</span></label>
+
+    </div>
+    <a class="headerlink" href="#regenerate_user_qr"></a>
+            <div class="pdoc-code codehilite"><pre><span></span><span id="regenerate_user_qr-146"><a href="#regenerate_user_qr-146"><span class="linenos">146</span></a><span class="nd">@router</span><span class="o">.</span><span class="n">post</span><span class="p">(</span><span class="s2">&quot;/users/</span><span class="si">{user_id}</span><span class="s2">/regenerate-qr&quot;</span><span class="p">,</span> <span class="n">status_code</span><span class="o">=</span><span class="mi">200</span><span class="p">)</span>
+</span><span id="regenerate_user_qr-147"><a href="#regenerate_user_qr-147"><span class="linenos">147</span></a><span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">regenerate_user_qr</span><span class="p">(</span>
+</span><span id="regenerate_user_qr-148"><a href="#regenerate_user_qr-148"><span class="linenos">148</span></a>    <span class="n">user_id</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> 
+</span><span id="regenerate_user_qr-149"><a href="#regenerate_user_qr-149"><span class="linenos">149</span></a>    <span class="n">user_service</span><span class="o">=</span><span class="n">Depends</span><span class="p">(</span><span class="n">get_user_service</span><span class="p">)</span>
+</span><span id="regenerate_user_qr-150"><a href="#regenerate_user_qr-150"><span class="linenos">150</span></a><span class="p">):</span>
+</span><span id="regenerate_user_qr-151"><a href="#regenerate_user_qr-151"><span class="linenos">151</span></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+</span><span id="regenerate_user_qr-152"><a href="#regenerate_user_qr-152"><span class="linenos">152</span></a><span class="sd">    Endpoint: Wymusza generację nowego QR tokena dla pracownika.</span>
+</span><span id="regenerate_user_qr-153"><a href="#regenerate_user_qr-153"><span class="linenos">153</span></a><span class="sd">    Poprzedni kod QR traci ważność (zwróci INVALID_QR przy próbie użycia).</span>
+</span><span id="regenerate_user_qr-154"><a href="#regenerate_user_qr-154"><span class="linenos">154</span></a><span class="sd">    &quot;&quot;&quot;</span>
+</span><span id="regenerate_user_qr-155"><a href="#regenerate_user_qr-155"><span class="linenos">155</span></a>    <span class="n">result</span> <span class="o">=</span> <span class="k">await</span> <span class="n">user_service</span><span class="o">.</span><span class="n">regenerate_qr_token</span><span class="p">(</span><span class="n">user_id</span><span class="p">)</span>
+</span><span id="regenerate_user_qr-156"><a href="#regenerate_user_qr-156"><span class="linenos">156</span></a>    
+</span><span id="regenerate_user_qr-157"><a href="#regenerate_user_qr-157"><span class="linenos">157</span></a>    <span class="k">if</span> <span class="ow">not</span> <span class="n">result</span><span class="p">[</span><span class="s2">&quot;success&quot;</span><span class="p">]:</span>
+</span><span id="regenerate_user_qr-158"><a href="#regenerate_user_qr-158"><span class="linenos">158</span></a>        <span class="c1"># Zwracamy 404 jeśli użytkownik nie istnieje, lub 400 przy błędzie bazy</span>
+</span><span id="regenerate_user_qr-159"><a href="#regenerate_user_qr-159"><span class="linenos">159</span></a>        <span class="k">raise</span> <span class="n">HTTPException</span><span class="p">(</span><span class="n">status_code</span><span class="o">=</span><span class="mi">404</span><span class="p">,</span> <span class="n">detail</span><span class="o">=</span><span class="n">result</span><span class="p">[</span><span class="s2">&quot;errors&quot;</span><span class="p">])</span>
+</span><span id="regenerate_user_qr-160"><a href="#regenerate_user_qr-160"><span class="linenos">160</span></a>        
+</span><span id="regenerate_user_qr-161"><a href="#regenerate_user_qr-161"><span class="linenos">161</span></a>    <span class="k">return</span> <span class="n">result</span>
+</span></pre></div>
+
+
+            <div class="docstring"><p>Endpoint: Wymusza generację nowego QR tokena dla pracownika.
+Poprzedni kod QR traci ważność (zwróci INVALID_QR przy próbie użycia).</p>
 </div>
 
 

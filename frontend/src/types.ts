@@ -92,6 +92,8 @@ export interface AccessLog {
   device_ip?: string;
   employee_id?: number;
   full_name?: string;
+  qr_content?: string;
+  captured_image?: string; 
 }
 
 export interface GetLogsResponse {
