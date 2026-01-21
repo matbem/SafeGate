@@ -48,8 +48,7 @@ export const api = {
     }
   },
 
-  // --- AUTH (POPRAWIONE) ---
-  // Teraz wysyła JSON na /auth/login (zgodnie z Twoim auth.py)
+  // --- AUTH ---
   login: async (username: string, password: string): Promise<LoginResponse> => {
     const payload = { username, password };
     const response = await apiClient.post<LoginResponse>('/auth/login', payload);
@@ -63,7 +62,6 @@ export const api = {
     return response.data.users || [];
   },
 
-  // Dodawanie użytkownika (z obsługą zdjęcia Base64)
   addUsers: async (users: Employee[]): Promise<UserOperationsResponse> => {
     const payload: AddUserRequest = { users_list: users };
     const response = await apiClient.post<UserOperationsResponse>('/admin/add_user', payload);
@@ -86,6 +84,14 @@ export const api = {
     const response = await apiClient.get<AccessLog[]>(`/admin/employees/${employeeId}/history`, {
       params: { limit }
     });
+    return response.data;
+  },
+
+  // --- NOWA FUNKCJA REGENERACJI QR ---
+  regenerateUserQR: async (userId: number): Promise<{ success: boolean; new_qr_token: string; qr_valid_until: string }> => {
+    const response = await apiClient.post<{ success: boolean; new_qr_token: string; qr_valid_until: string }>(
+      `/admin/users/${userId}/regenerate-qr`
+    );
     return response.data;
   },
 

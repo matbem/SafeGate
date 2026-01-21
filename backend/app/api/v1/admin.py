@@ -141,3 +141,20 @@ async def prune_logs(payload: PruneLogsRequest, user_service=Depends(get_user_se
         deleted_count=result["deleted_count"],
         message=f"Successfully deleted {result['deleted_count']} logs older than {payload.cutoff_date}."
     )
+
+@router.post("/users/{user_id}/regenerate-qr", status_code=200)
+async def regenerate_user_qr(
+    user_id: int, 
+    user_service=Depends(get_user_service)
+):
+    """
+    Endpoint: Wymusza generację nowego QR tokena dla pracownika.
+    Poprzedni kod QR traci ważność (zwróci INVALID_QR przy próbie użycia).
+    """
+    result = await user_service.regenerate_qr_token(user_id)
+    
+    if not result["success"]:
+        # Zwracamy 404 jeśli użytkownik nie istnieje, lub 400 przy błędzie bazy
+        raise HTTPException(status_code=404, detail=result["errors"])
+        
+    return result

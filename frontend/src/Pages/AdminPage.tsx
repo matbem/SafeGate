@@ -1,7 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { api } from '../api';
 import type { Employee, AccessLog } from '../types';
-import { LogOut, Users, FileText, Trash2, Plus, RefreshCw, History, ShieldAlert, Upload, X, Download, QrCode, Image as ImageIcon } from 'lucide-react';
+import { 
+    LogOut, Users, FileText, Trash2, Plus, RefreshCw, 
+    History, ShieldAlert, Upload, X, Download, QrCode, 
+    Image as ImageIcon, AlertTriangle, CheckCircle 
+} from 'lucide-react'; // Dodano AlertTriangle i CheckCircle
 import { QRCodeCanvas } from 'qrcode.react';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
@@ -39,6 +43,10 @@ const AdminPage: React.FC = () => {
   const [isAddUserOpen, setIsAddUserOpen] = useState(false);
   const [selectedQrUser, setSelectedQrUser] = useState<Employee | null>(null);
   const [selectedHistoryUser, setSelectedHistoryUser] = useState<Employee | null>(null);
+  
+  // --- NOWY STAN DLA MODALA REGENERACJI ---
+  const [regenerateTarget, setRegenerateTarget] = useState<Employee | null>(null);
+  const [isRegenerating, setIsRegenerating] = useState(false);
   
   const [viewImage, setViewImage] = useState<string | null>(null);
 
@@ -177,6 +185,40 @@ const AdminPage: React.FC = () => {
     }
   };
 
+  // --- LOGIKA REGENERACJI Z MODALEM ---
+  
+  // 1. Otwarcie modala (zamiast window.confirm)
+  const openRegenerateModal = (user: Employee) => {
+      setRegenerateTarget(user);
+  };
+
+  // 2. Wykonanie akcji po potwierdzeniu w modalu
+  const confirmRegeneration = async () => {
+    if (!regenerateTarget) return;
+    
+    setIsRegenerating(true);
+    try {
+        const result = await api.regenerateUserQR(regenerateTarget.id);
+        
+        if (result.success) {
+            // Optimistic UI update - aktualizacja listy bez przeładowania
+            setUsers(prevUsers => prevUsers.map(user => 
+                user.id === regenerateTarget.id 
+                ? { ...user, qr_token: result.new_qr_token, qr_valid_until: result.qr_valid_until } 
+                : user
+            ));
+            
+            // Zamknięcie modala
+            setRegenerateTarget(null);
+        }
+    } catch (error) {
+        console.error("Błąd regeneracji:", error);
+        alert("Wystąpił błąd podczas generowania nowego kodu.");
+    } finally {
+        setIsRegenerating(false);
+    }
+  };
+
   const downloadQRFromModal = () => {
     const canvas = document.getElementById('qr-code-modal') as HTMLCanvasElement;
     if (canvas && selectedQrUser) {
@@ -192,14 +234,12 @@ const AdminPage: React.FC = () => {
     }
   };
 
-  // --- PDF FONT LOADER (POPRAWIONE: Load Regular + Bold) ---
+  // --- PDF FONT LOADER ---
   const applyPolishFont = async (doc: jsPDF) => {
     try {
-        // 1. Pobieramy Regular
         const respReg = await fetch('https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.1.66/fonts/Roboto/Roboto-Regular.ttf');
         const blobReg = await respReg.blob();
         
-        // 2. Pobieramy Medium (użyjemy jako Bold, bo jest czytelniejszy w druku tabel)
         const respBold = await fetch('https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.1.66/fonts/Roboto/Roboto-Medium.ttf');
         const blobBold = await respBold.blob();
 
@@ -218,7 +258,7 @@ const AdminPage: React.FC = () => {
 
         await Promise.all([
             loadFont(blobReg, 'Roboto-Regular.ttf', 'normal'),
-            loadFont(blobBold, 'Roboto-Medium.ttf', 'bold') // Rejestrujemy Medium jako Bold
+            loadFont(blobBold, 'Roboto-Medium.ttf', 'bold')
         ]);
 
         doc.setFont('Roboto'); 
@@ -227,14 +267,13 @@ const AdminPage: React.FC = () => {
     }
   };
 
-  // --- PDF GENERATION (SIMPLE) ---
+  // --- PDF GENERATION ---
   const generatePDF = async () => {
     const doc = new jsPDF('p', 'mm', 'a4');
 
     await applyPolishFont(doc);
 
     doc.setFontSize(18);
-    // Upewniamy się, że tytuł też ma polskie znaki (choć 'Roboto' jest już ustawione globalnie)
     doc.setFont('Roboto', 'bold');
     doc.text('Raport logowania użytkowników', 14, 22);
     
@@ -269,7 +308,7 @@ const AdminPage: React.FC = () => {
       styles: {
         fontSize: 8,
         cellPadding: 3,
-        font: 'Roboto', // Styl dla komórek
+        font: 'Roboto',
       },
       headStyles: {
         fillColor: [41, 128, 185],
@@ -372,7 +411,7 @@ const AdminPage: React.FC = () => {
                 fillColor: [41, 128, 185], 
                 textColor: 255, 
                 font: 'Roboto',
-                fontStyle: 'bold' // Teraz zadziała poprawnie z polskimi znakami
+                fontStyle: 'bold'
             },
             alternateRowStyles: { fillColor: [245, 245, 245] },
             didDrawPage: (data) => {
@@ -396,7 +435,6 @@ const AdminPage: React.FC = () => {
     }
   };
 
-  // --- Render ---
   if (!token) {
     return (
       <div className="min-h-screen bg-gray-100 flex items-center justify-center">
@@ -445,7 +483,6 @@ const AdminPage: React.FC = () => {
                     <RefreshCw size={20} className={loading ? 'animate-spin' : ''} />
                 </button>
                 
-                {/* PDF BUTTON - OPEN MODAL */}
                 <button 
                     onClick={() => setIsPdfModalOpen(true)} 
                     className="bg-blue-600 text-white p-2 rounded hover:bg-blue-700 flex items-center gap-2 ml-2 shadow-sm transition-all"
@@ -559,6 +596,14 @@ const AdminPage: React.FC = () => {
                         <button onClick={() => setSelectedQrUser(user)} className="text-purple-600 hover:bg-purple-50 p-2 rounded" title="Kod QR">
                             <QrCode size={18} />
                         </button>
+                        {/* Zaktualizowany handler do otwierania modala */}
+                        <button 
+                            onClick={() => openRegenerateModal(user)} 
+                            className="text-indigo-600 hover:bg-indigo-50 p-2 rounded" 
+                            title="Wygeneruj nowy kod QR (unieważnij stary)"
+                        >
+                            <RefreshCw size={18} />
+                        </button>
                         <button onClick={() => handleShowHistory(user)} className="text-blue-500 hover:bg-blue-50 p-2 rounded" title="Historia">
                             <History size={18} />
                         </button>
@@ -574,6 +619,54 @@ const AdminPage: React.FC = () => {
           </div>
         )}
       </main>
+
+      {/* --- REGENERATE QR CONFIRMATION MODAL --- */}
+      {regenerateTarget && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[60] animate-in fade-in duration-200 backdrop-blur-sm">
+            <div className="bg-white p-6 rounded-lg shadow-2xl w-full max-w-md transform scale-100 transition-all">
+                <div className="flex items-start gap-4 mb-4">
+                    <div className="bg-amber-100 p-2 rounded-full flex-shrink-0">
+                        <AlertTriangle className="text-amber-600" size={24} />
+                    </div>
+                    <div>
+                        <h3 className="text-lg font-bold text-gray-900">Regeneracja Tokena QR</h3>
+                        <p className="text-sm text-gray-500 mt-1 leading-relaxed">
+                            Czy na pewno chcesz wygenerować nowy kod QR dla użytkownika <span className="font-semibold text-gray-800">{regenerateTarget.full_name}</span>?
+                        </p>
+                        <div className="mt-3 bg-red-50 border border-red-100 p-3 rounded text-xs text-red-700 font-medium">
+                            <span className="block font-bold mb-1">Uwaga:</span>
+                            Obecny kod QR zostanie natychmiast unieważniony. Wszystkie wydrukowane kopie starego kodu przestaną działać.
+                        </div>
+                    </div>
+                </div>
+                
+                <div className="flex justify-end gap-3 pt-2">
+                    <button 
+                        onClick={() => setRegenerateTarget(null)} 
+                        className="px-4 py-2 bg-white text-gray-700 border border-gray-300 rounded hover:bg-gray-50 font-medium transition text-sm disabled:opacity-50"
+                        disabled={isRegenerating}
+                    >
+                        Anuluj
+                    </button>
+                    <button 
+                        onClick={confirmRegeneration} 
+                        className="px-4 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700 font-medium shadow-sm transition text-sm flex items-center gap-2 disabled:bg-indigo-400"
+                        disabled={isRegenerating}
+                    >
+                        {isRegenerating ? (
+                            <>
+                                <RefreshCw size={16} className="animate-spin" /> Generowanie...
+                            </>
+                        ) : (
+                            <>
+                                <RefreshCw size={16} /> Generuj nowy kod
+                            </>
+                        )}
+                    </button>
+                </div>
+            </div>
+        </div>
+      )}
 
       {/* --- Image Preview Modal --- */}
       {viewImage && (

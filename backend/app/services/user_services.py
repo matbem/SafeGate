@@ -1,5 +1,5 @@
 import uuid
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import List, Dict, Any
 from .access_service import ImageProcessingFacade
 from loguru import logger
@@ -110,10 +110,10 @@ class UserService:
                 logger.error(f"Error updating user ID {update.get('id')}: {str(e)}")
                 errors.append(f"Error updating user ID {update.get('id')}: {str(e)}")
 
-            return {
+        return {
             "modified_count": modified_count,
             "errors": errors
-            }
+        }
         
     async def delete_users(self, ids_to_delete: List[int]):
         """
@@ -166,5 +166,33 @@ class UserService:
         Gets logs from a specific timestamp.
         """
         logger.info(f"Fetching logs since {since}.")
-        # POPRAWKA: Dodano słowo kluczowe 'await'
         return await self.log_repo.get_logs_since(since)
+
+    async def regenerate_qr_token(self, user_id: int, validity_days: int = 365) -> Dict[str, Any]:
+        """
+        Generates a new QR token for a user, invalidating the old one.
+        Ensures atomicity via DB update.
+        """
+        new_token = str(uuid.uuid4())
+        new_validity = datetime.now(timezone.utc) + timedelta(days=validity_days)
+        
+        update_data = {
+            "qr_token": new_token,
+            "qr_valid_until": new_validity
+        }
+        
+        success = await self.employee_repo.update(user_id, update_data)
+        
+        if success:
+            logger.info(f"Regenerated QR token for user ID: {user_id}. Valid until: {new_validity}")
+            return {
+                "success": True, 
+                "new_qr_token": new_token, 
+                "qr_valid_until": new_validity.isoformat()
+            }
+        
+        logger.error(f"Failed to regenerate QR for user ID: {user_id} - user not found.")
+        return {
+            "success": False, 
+            "errors": ["User not found or database update failed."]
+        }
