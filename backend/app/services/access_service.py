@@ -22,10 +22,8 @@ class AccessService:
         """
         logger.info(f"Verifying access for QR Token: {qr_token}")
         
-        # --- KROK 1: Sprawdzenie QR w bazie ---
         user = await self.employee_repo.get_by_qr(qr_token)
 
-        # --- SCENARIUSZ: QR NIE ISTNIEJE W BAZIE ---
         if not user:
             logger.warning(f"QR Token '{qr_token}' not found in DB.")
             await self._log_attempt(
@@ -40,7 +38,6 @@ class AccessService:
                 "message": "Invalid QR code."
             }
         
-        # --- SCENARIUSZ: QR ISTNIEJE, ALE WYGASŁ ---
         if user['qr_valid_until'] < datetime.now(timezone.utc):
             await self._log_attempt(
                 status="EXPIRED_QR", 
@@ -53,8 +50,7 @@ class AccessService:
                 "error_code": "EXPIRED_QR", 
                 "message": "QR token has expired."
             }
-
-        # --- KROK 2: Skanowanie Twarzy (tylko jeśli QR jest poprawny) ---
+        
         face_verification = self.image_processor.process_verification_request(
             image_base64=image_base64,
             known_encoding=user['face_encoding']
@@ -78,7 +74,6 @@ class AccessService:
             elif status_for_db not in valid_statuses:
                 status_for_db = "FACE_MISMATCH"
 
-        # --- ZAPIS WYNIKU Z TWARZĄ ---
         await self._log_attempt(
             status=status_for_db, 
             employee_id=user['id'], 
@@ -118,25 +113,27 @@ class AccessService:
     
     async def validate_qr_token(self, qr_token: str) -> dict:
         """
-        Szybkie sprawdzenie czy kod QR istnieje i jest ważny.
-        TERAZ: Loguje również błędne próby do bazy danych.
+        Performs a rapid validation check of the QR code existence and validity. 
+        Logs failed attempts to the database for security auditing
         """
         user = await self.employee_repo.get_by_qr(qr_token)
 
         if not user:
-            # <--- ZMIANA: Logujemy próbę użycia nieznanego QR
             logger.warning(f"Pre-validation failed: QR Token '{qr_token}' not found.")
             await self._log_attempt(
                 status="INVALID_QR",
                 employee_id=None,
                 confidence=0.0,
-                image=None,       # Pre-walidacja zazwyczaj nie przesyła zdjęcia
+                image=None,
                 qr_content=qr_token
             )
-            return {"valid": False, "message": "Nieznany kod QR"}
+            return {
+                "valid": False, 
+                "message": "Invalid QR code", # Zmieniono na angielski
+                "employee_name": None 
+            }
         
         if user['qr_valid_until'] < datetime.now(timezone.utc):
-            # <--- ZMIANA: Logujemy próbę użycia wygasłego QR
             logger.warning(f"Pre-validation failed: QR Token for user {user['id']} expired.")
             await self._log_attempt(
                 status="EXPIRED_QR",
@@ -145,11 +142,14 @@ class AccessService:
                 image=None,
                 qr_content=qr_token
             )
-            return {"valid": False, "message": "Kod QR wygasł"}
+            return {
+                "valid": False, 
+                "message": "QR token has expired", 
+                "employee_name": None
+            }
 
-        # Jeśli sukces, nie logujemy (logowanie nastąpi dopiero przy verify_entrance ze zdjęciem)
         return {
             "valid": True, 
-            "message": "Kod poprawny", 
+            "message": "QR code valid", 
             "employee_name": user['full_name']
         }

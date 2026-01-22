@@ -7,17 +7,21 @@ from datetime import datetime
 client = TestClient(app)
 mock_access_service = AsyncMock()
 
+# Replaces real service with a mock in the FastAPI dependency injection system
 app.dependency_overrides[get_access_service] = lambda: mock_access_service
 
 def test_interface_misuse_missing_field():
-    """Wysyłka JSON bez wymaganego pola 'image_base64' -> 422."""
-    # Tu też dodajemy timestamp, żeby błąd dotyczył faktycznie braku obrazka, a nie timestampu
+    """
+    Tests Pydantic schema enforcement. Returns 422 if mandatory 'image_base64' is missing.
+    """
     payload = {"qr_token": "some-uuid", "timestamp": str(datetime.now())} 
     response = client.post("/api/v1/access/verify", json=payload)
     assert response.status_code == 422
 
 def test_valid_interface_flow():
-    """Sprawdzenie czy API zwraca wszystkie pola (w tym opcjonalne)."""
+    """
+    Verifies full API lifecycle. Checks if 200 OK is returned with all mandatory and optional fields.
+    """
     mock_access_service.verify_entrance.return_value = {
         "access_granted": True,
         "error_code": "SUCCESS",
@@ -29,7 +33,7 @@ def test_valid_interface_flow():
     payload = {
         "qr_token": "123e4567-e89b-12d3-a456-426614174000",
         "image_base64": "data:image/png;base64,....",
-        "timestamp": str(datetime.now())  # <--- POPRAWKA: Dodano wymagane pole
+        "timestamp": str(datetime.now())
     }
     
     response = client.post("/api/v1/access/verify", json=payload)

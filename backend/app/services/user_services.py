@@ -44,7 +44,7 @@ class UserService:
 
                 valid_until = user.get("qr_valid_until")
                 if not valid_until:
-                    valid_until = (datetime.now() + timedelta(days=360)).isoformat()
+                    valid_until = (datetime.now() + timedelta(days=90)).isoformat()
 
                 new_user = {
                     "full_name": user["full_name"],
@@ -168,7 +168,7 @@ class UserService:
         logger.info(f"Fetching logs since {since}.")
         return await self.log_repo.get_logs_since(since)
 
-    async def regenerate_qr_token(self, user_id: int, validity_days: int = 365) -> Dict[str, Any]:
+    async def regenerate_qr_token(self, user_id: int, validity_days: int = 180) -> Dict[str, Any]:
         """
         Generates a new QR token for a user, invalidating the old one.
         Ensures atomicity via DB update.

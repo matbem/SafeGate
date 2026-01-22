@@ -5,11 +5,10 @@ from app.services.access_service import AccessService
 
 @pytest.mark.asyncio
 async def test_valid_qr_wrong_face():
-    """Scenariusz: Kradzież karty (Poprawny QR, ale zła twarz)."""
+    """Scenario: Stolen card (Valid QR token, but biometric mismatch)."""
     mock_emp_repo = AsyncMock()
     mock_log_repo = AsyncMock()
     
-    # 1. QR ważny
     mock_emp_repo.get_by_qr.return_value = {
         'id': 777,
         'qr_valid_until': datetime.now(timezone.utc) + timedelta(days=1),
@@ -18,7 +17,6 @@ async def test_valid_qr_wrong_face():
     
     with patch('app.services.access_service.ImageProcessingFacade') as MockFacade:
         facade = MockFacade.return_value
-        # 2. AI odrzuca twarz
         facade.process_verification_request.return_value = {
             'success': False,
             'status': 'FACE_MISMATCH',
@@ -32,7 +30,6 @@ async def test_valid_qr_wrong_face():
         assert result['access_granted'] is False
         assert result['error_code'] == "FACE_MISMATCH"
         
-        # Weryfikacja: logujemy próbę na konto pracownika ID 777
         call_args = mock_log_repo.create.call_args.kwargs
         assert call_args['employee_id'] == 777
         assert call_args['captured_image'] is not None

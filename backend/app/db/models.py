@@ -12,6 +12,7 @@ class AccessStatus(enum.Enum):
     INVALID_QR = "INVALID_QR"
     NO_FACE = "NO_FACE"
     TAMPERING_DETECTED = "TAMPERING_DETECTED"
+    EXPIRED_QR = "EXPIRED_QR"
 
 class Employee(Base):
     __tablename__ = "employees"

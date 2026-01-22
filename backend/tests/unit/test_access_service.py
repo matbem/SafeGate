@@ -15,7 +15,7 @@ class TestAccessServicePartitions:
             yield emp_repo, log_repo, facade_instance
 
     async def test_partition_invalid_qr(self, service_mocks):
-        """Nieznany QR -> Odmowa + BRAK zapisu zdjęcia (RODO)."""
+        """Unknown QR -> Access Denied + NO image storage (GDPR compliance)."""
         emp_repo, log_repo, _ = service_mocks
         service = AccessService(emp_repo, log_repo)
         emp_repo.get_by_qr.return_value = None
@@ -25,12 +25,12 @@ class TestAccessServicePartitions:
         assert result['access_granted'] is False
         assert result['error_code'] == "INVALID_QR"
         
-        # Weryfikacja braku zdjęcia
+        # Verify that no image was stored for unauthorized tokens
         log_repo.create.assert_called_once()
         assert log_repo.create.call_args.kwargs['captured_image'] is None
 
     async def test_partition_expired_qr(self, service_mocks):
-        """Wygasły QR -> Odmowa + ZAPIS zdjęcia (dowód)."""
+        """Expired QR -> Access Denied + Image stored (as evidence)."""
         emp_repo, log_repo, _ = service_mocks
         service = AccessService(emp_repo, log_repo)
         expired_date = datetime.now(timezone.utc) - timedelta(days=1)
@@ -44,7 +44,7 @@ class TestAccessServicePartitions:
         assert log_repo.create.call_args.kwargs['captured_image'] == "base64_img"
 
     async def test_partition_success_access(self, service_mocks):
-        """Poprawny QR i Twarz -> Otwarcie."""
+        """Valid QR and Face -> Access Granted."""
         emp_repo, log_repo, facade = service_mocks
         service = AccessService(emp_repo, log_repo)
         

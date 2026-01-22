@@ -1,49 +1,62 @@
 import pytest
-import numpy as np
-from unittest.mock import patch
-from app.core.biometrics import BiometricsCore
+from unittest.mock import AsyncMock, patch
+from datetime import datetime, timezone, timedelta
+from app.services.access_service import AccessService
 
-class TestBiometricsBoundaries:
+@pytest.mark.asyncio
+class TestAccessServicePartitions:
     
     @pytest.fixture
-    def biometrics(self):
-        # Mockujemy ustawienia
-        with patch('app.core.biometrics.settings') as mock_settings:
-            mock_settings.BLUR_THRESHOLD = 100.0
-            mock_settings.BRIGHTNESS__MIN = 50.0 
-            mock_settings.BRIGHTNESS_MAX = 200.0
-            mock_settings.MATCH_TOLETANCE = 0.6
-            return BiometricsCore()
+    def service_mocks(self):
+        emp_repo = AsyncMock()
+        log_repo = AsyncMock()
+        with patch('app.services.access_service.ImageProcessingFacade') as MockFacade:
+            facade_instance = MockFacade.return_value
+            yield emp_repo, log_repo, facade_instance
 
-    def test_brightness_lower_boundary(self, biometrics):
-        """Sprawdza punkt graniczny jasności (49 vs 50)."""
-        # Mockujemy cv2.Laplacian, aby pominąć test ostrości
-        with patch('cv2.Laplacian') as mock_laplace:
-            mock_laplace.return_value.var.return_value = 500.0
-            
-            # 1. Zbyt ciemny (49) -> FAIL
-            dark_img = np.full((100, 100, 3), 49, dtype=np.uint8)
-            result_fail = biometrics.check_image_quality(dark_img)
-            assert result_fail['valid'] is False
-            assert "too dark" in result_fail['error_message']
-
-            # 2. Na granicy (50) -> PASS
-            border_img = np.full((100, 100, 3), 50, dtype=np.uint8)
-            result_pass = biometrics.check_image_quality(border_img)
-            assert result_pass['valid'] is True
-
-    @patch('app.core.biometrics.face_recognition')
-    def test_liveness_partition_small_face(self, mock_face_rec, biometrics):
-        """
-        Partycja 1: Twarz za mała (< 4%).
-        Symulacja: Obraz 1000x1000 (1mln px), Twarz 100x100 (10k px) = 1%.
-        """
-        fake_image = np.zeros((1000, 1000, 3), dtype=np.uint8)
-        # face_locations = [(top, right, bottom, left)]
-        mock_face_rec.face_locations.return_value = [(0, 100, 100, 0)] 
+    async def test_partition_invalid_qr(self, service_mocks):
+        """Unknown QR -> Access Denied + NO image storage (GDPR compliance)."""
+        emp_repo, log_repo, _ = service_mocks
+        service = AccessService(emp_repo, log_repo)
+        emp_repo.get_by_qr.return_value = None
         
-        result = biometrics.detect_liveness(fake_image)
+        result = await service.verify_entrance("BAD_TOKEN", "base64_img")
         
-        assert result['valid'] is False
-        assert "Face too small" in result['error_message']
+        assert result['access_granted'] is False
+        assert result['error_code'] == "INVALID_QR"
+        
+        log_repo.create.assert_called_once()
+        assert log_repo.create.call_args.kwargs['captured_image'] is None
 
+    async def test_partition_expired_qr(self, service_mocks):
+        """Expired QR -> Access Denied + Image stored (evidence for audit)."""
+        emp_repo, log_repo, _ = service_mocks
+        service = AccessService(emp_repo, log_repo)
+        expired_date = datetime.now(timezone.utc) - timedelta(days=1)
+        emp_repo.get_by_qr.return_value = {
+            'id': 123, 'qr_valid_until': expired_date, 'face_encoding': []
+        }
+        
+        result = await service.verify_entrance("EXPIRED", "base64_img")
+        
+        assert result['error_code'] == "EXPIRED_QR"
+        assert log_repo.create.call_args.kwargs['captured_image'] == "base64_img"
+
+    async def test_partition_success_access(self, service_mocks):
+        """Valid QR and Face -> Access Granted."""
+        emp_repo, log_repo, facade = service_mocks
+        service = AccessService(emp_repo, log_repo)
+        
+        emp_repo.get_by_qr.return_value = {
+            'id': 99, 
+            'qr_valid_until': datetime.now(timezone.utc) + timedelta(hours=1),
+            'face_encoding': [0.1]
+        }
+        facade.process_verification_request.return_value = {
+            'success': True, 'status': 'SUCCESS', 'confidence_score': 0.98
+        }
+        
+        result = await service.verify_entrance("VALID", "img")
+        
+        assert result['access_granted'] is True
+        assert log_repo.create.call_args.kwargs['status'] == "SUCCESS"

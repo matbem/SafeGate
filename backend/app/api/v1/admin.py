@@ -62,8 +62,11 @@ async def update_users(payload: UpdateUserListRequest, user_service=Depends(get_
     - UserOperationsResponse: response indicating success/failure and details
 
     """
+    # --- FIX: Konwersja modeli Pydantic na słowniki przed wysłaniem do serwisu ---
+    # exclude_unset=True zapewnia, że przesyłamy tylko pola, które faktycznie zostały wysłane w JSON
+    users_dicts = [user.model_dump(exclude_unset=True) for user in payload.users_list]
 
-    result = await user_service.update_users(payload.users_list)
+    result = await user_service.update_users(users_dicts)
     if result["errors"]:
         raise HTTPException(status_code=400, detail=result["errors"])
     return UserOperationsResponse(

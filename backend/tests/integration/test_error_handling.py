@@ -7,11 +7,9 @@ from datetime import datetime
 
 @pytest.mark.asyncio
 async def test_database_failure_during_logging():
-    """Awaria bazy po weryfikacji -> Fail-Secure (500 Internal Server Error)."""
     mock_service = AsyncMock()
     mock_service.verify_entrance.side_effect = Exception("DB Connection Refused")
 
-    # <--- POPRAWKA: Dodano timestamp=datetime.now()
     payload = AccessVerifyRequest(
         qr_token="valid-uuid", 
         image_base64="data...",

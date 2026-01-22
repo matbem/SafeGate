@@ -4,7 +4,7 @@ import type { Employee, AccessLog } from '../types';
 import { 
     LogOut, Users, FileText, Trash2, Plus, RefreshCw, 
     History, ShieldAlert, Upload, X, Download, QrCode, 
-    Image as ImageIcon, AlertTriangle 
+    Image as ImageIcon, AlertTriangle, Edit 
 } from 'lucide-react';
 import { QRCodeCanvas } from 'qrcode.react';
 import jsPDF from 'jspdf';
@@ -47,6 +47,16 @@ const AdminPage: React.FC = () => {
   const [pruneDate, setPruneDate] = useState('');
 
   const [isAddUserOpen, setIsAddUserOpen] = useState(false);
+  
+  // --- EDYCJA UŻYTKOWNIKA - STANY ---
+  const [isEditUserOpen, setIsEditUserOpen] = useState(false);
+  const [editingUser, setEditingUser] = useState<Employee | null>(null);
+  const [editFormData, setEditFormData] = useState<{ full_name: string; qr_valid_until: string; reference_photo_base64?: string }>({
+      full_name: '',
+      qr_valid_until: '',
+      reference_photo_base64: ''
+  });
+
   const [selectedQrUser, setSelectedQrUser] = useState<Employee | null>(null);
   const [selectedHistoryUser, setSelectedHistoryUser] = useState<Employee | null>(null);
   
@@ -131,6 +141,61 @@ const AdminPage: React.FC = () => {
   };
 
   const handleRemovePhoto = () => setNewUser(prev => ({ ...prev, reference_photo_base64: '' }));
+
+  // --- OBSŁUGA EDYCJI ---
+  const openEditModal = (user: Employee) => {
+      setEditingUser(user);
+      setEditFormData({
+          full_name: user.full_name,
+          qr_valid_until: user.qr_valid_until ? new Date(user.qr_valid_until).toISOString().slice(0, 16) : '',
+          reference_photo_base64: '' 
+      });
+      setIsEditUserOpen(true);
+  };
+
+  const handleEditFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      if (file) {
+          const reader = new FileReader();
+          reader.onloadend = () => {
+              if (typeof reader.result === 'string') {
+                  setEditFormData(prev => ({ ...prev, reference_photo_base64: reader.result as string }));
+              }
+          };
+          reader.readAsDataURL(file);
+      }
+  };
+
+  const handleSaveEdit = async () => {
+      if (!editingUser) return;
+
+      try {
+          const payload: Partial<Employee> = {
+              id: editingUser.id,
+              full_name: editFormData.full_name,
+              qr_valid_until: new Date(editFormData.qr_valid_until).toISOString(),
+          };
+
+          if (editFormData.reference_photo_base64) {
+              payload.reference_photo_base64 = editFormData.reference_photo_base64;
+          }
+
+          const response = await api.updateUsers([payload]);
+
+          if (response.success) {
+              setIsEditUserOpen(false);
+              setEditingUser(null);
+              fetchData(); 
+          } else {
+              alert('Błąd aktualizacji: ' + (response.errors?.join(', ') || 'Nieznany błąd'));
+          }
+      } catch (error) {
+          console.error(error);
+          alert('Wystąpił błąd podczas edycji użytkownika.');
+      }
+  };
+
+  // --- POZOSTAŁE FUNKCJE ---
 
   const handleAddUser = async () => {
     try {
@@ -277,9 +342,19 @@ const AdminPage: React.FC = () => {
         const filteredLogs = rawLogs.filter(log => {
             const logTime = new Date(log.timestamp).getTime();
             if (logTime > endTimestamp) return false;
+
+            // --- NOWA LOGIKA: FILTROWANIE PO BŁĘDNYCH KODACH ---
+            if (pdfFilters.userId === 'invalid_qr') {
+                return log.status === 'INVALID_QR';
+            }
+
+            // --- LOGIKA STANDARDOWA ---
             if (pdfFilters.userId !== 'all') {
+                // Jeśli wybrano konkretnego usera
                 if (log.employee_id !== Number(pdfFilters.userId)) return false;
             }
+            
+            // Jeśli 'all', zwracamy true (obejmuje to też INVALID_QR, które nie mają employee_id)
             return true;
         });
 
@@ -294,7 +369,13 @@ const AdminPage: React.FC = () => {
 
         doc.setFontSize(18);
         doc.setFont('Roboto', 'bold');
-        doc.text('Raport logowań użytkowników', 14, 22);
+        
+        // --- NAGŁÓWEK ZALEŻNY OD WYBORU ---
+        if (pdfFilters.userId === 'invalid_qr') {
+             doc.text('Raport: Nieprawidłowe kody QR', 14, 22);
+        } else {
+             doc.text('Raport logowań użytkowników', 14, 22);
+        }
         
         doc.setFont('Roboto', 'normal');
         doc.setFontSize(10);
@@ -302,15 +383,17 @@ const AdminPage: React.FC = () => {
         doc.text(`Wygenerowano: ${new Date().toLocaleString()}`, 14, 30);
         doc.text(`Zakres: ${new Date(pdfFilters.startDate).toLocaleString()} - ${new Date(pdfFilters.endDate).toLocaleString()}`, 14, 35);
         
-        if (pdfFilters.userId !== 'all') {
+        if (pdfFilters.userId === 'invalid_qr') {
+             doc.text(`Filtr: Tylko błędne kody`, 14, 40);
+        } else if (pdfFilters.userId !== 'all') {
             const userName = users.find(u => u.id === Number(pdfFilters.userId))?.full_name || 'Nieznany';
             doc.text(`Użytkownik: ${userName}`, 14, 40);
         } else {
-            doc.text(`Użytkownik: Wszyscy`, 14, 40);
+            doc.text(`Użytkownik: Wszyscy (w tym błędne próby)`, 14, 40);
         }
 
         // KOLUMNY PDF
-        const tableColumn = ["Data i Czas", "ID", "Pracownik", "Status", "Pewność (%)"];
+        const tableColumn = ["Data i Czas", "ID", "Pracownik / QR", "Status", "Pewność (%)"];
         const tableRows = filteredLogs.map(log => {
             let statusText = log.status;
             if (log.status === 'SUCCESS') statusText = 'Prawidłowe';
@@ -320,16 +403,16 @@ const AdminPage: React.FC = () => {
 
             // Logika dla wyświetlania pracownika w PDF
             let employeeDisplay = log.full_name || '-';
-            // Rzutowanie na ExtendedAccessLog, żeby TS nie krzyczał o qr_content
             const extendedLog = log as ExtendedAccessLog;
             
+            // Jeśli log to INVALID_QR, wyświetlamy treść kodu zamiast myślnika
             if (log.status === 'INVALID_QR' && extendedLog.qr_content) {
                 employeeDisplay = `QR: ${extendedLog.qr_content}`;
             }
 
             return [
                 new Date(log.timestamp).toLocaleString(),
-                log.employee_id || '-', // ID w osobnej kolumnie
+                log.employee_id || '-', 
                 employeeDisplay,
                 statusText,
                 log.confidence ? `${(log.confidence * 100).toFixed(1)}%` : '-'
@@ -508,7 +591,6 @@ const AdminPage: React.FC = () => {
 
             <div className="overflow-x-auto">
               <table className="w-full text-left text-sm">
-                {/* POPRAWIONA SEKCJA THEAD - BEZ SPACJI MIĘDZY TAGAMI */}
                 <thead className="bg-gray-100 uppercase text-gray-600">
                   <tr><th className="p-3">Data i Godzina</th><th className="p-3">ID</th><th className="p-3">Pracownik</th><th className="p-3">Status / Powód</th><th className="p-3">Pewność</th><th className="p-3 text-center">Dowód</th></tr>
                 </thead>
@@ -597,6 +679,15 @@ const AdminPage: React.FC = () => {
                       <td className="p-3 font-mono text-xs text-gray-500">{user.qr_token}</td>
                       <td className="p-3">{new Date(user.qr_valid_until).toLocaleDateString()}</td>
                       <td className="p-3 flex justify-end gap-2">
+                        {/* --- EDYCJA --- */}
+                        <button 
+                            onClick={() => openEditModal(user)} 
+                            className="text-orange-500 hover:bg-orange-50 p-2 rounded" 
+                            title="Edytuj dane"
+                        >
+                            <Edit size={18} />
+                        </button>
+                        
                         <button onClick={() => setSelectedQrUser(user)} className="text-purple-600 hover:bg-purple-50 p-2 rounded" title="Kod QR">
                             <QrCode size={18} />
                         </button>
@@ -622,6 +713,85 @@ const AdminPage: React.FC = () => {
           </div>
         )}
       </main>
+
+      {/* --- Edit User Modal --- */}
+      {isEditUserOpen && editingUser && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 animate-in fade-in duration-200">
+            <div className="bg-white p-6 rounded shadow-lg w-96 max-h-[90vh] overflow-y-auto">
+                <h3 className="text-lg font-bold mb-4 flex items-center gap-2">
+                    <Edit size={20} className="text-orange-500"/> 
+                    Edytuj Pracownika
+                </h3>
+                
+                <div className="mb-3 text-xs text-gray-400 font-mono">
+                    ID: {editingUser.id}
+                </div>
+
+                <label className="block text-sm mb-1 font-medium text-gray-700">Imię i Nazwisko</label>
+                <input 
+                    className="w-full border p-2 mb-4 rounded focus:ring-2 focus:ring-orange-200 outline-none" 
+                    value={editFormData.full_name} 
+                    onChange={e => setEditFormData({...editFormData, full_name: e.target.value})} 
+                />
+
+                <label className="block text-sm mb-1 font-medium text-gray-700">Ważność kodu QR</label>
+                <input 
+                    type="datetime-local"
+                    className="w-full border p-2 mb-4 rounded focus:ring-2 focus:ring-orange-200 outline-none" 
+                    value={editFormData.qr_valid_until} 
+                    onChange={e => setEditFormData({...editFormData, qr_valid_until: e.target.value})} 
+                />
+                
+                <label className="block text-sm mb-1 font-medium text-gray-700">Aktualizacja zdjęcia (opcjonalne)</label>
+                <div className="mb-4">
+                    {!editFormData.reference_photo_base64 ? (
+                    <div className="space-y-2">
+                        {editingUser.reference_photo_base64 && (
+                            <div className="flex items-center gap-2 mb-2 p-2 bg-gray-50 rounded border">
+                                <img src={editingUser.reference_photo_base64} alt="Current" className="w-10 h-10 rounded-full object-cover"/>
+                                <span className="text-xs text-gray-500">Obecne zdjęcie</span>
+                            </div>
+                        )}
+                        
+                        <label className="w-full border-2 border-dashed border-gray-300 rounded p-4 flex flex-col items-center cursor-pointer hover:bg-orange-50 hover:border-orange-300 transition-all">
+                            <Upload className="text-gray-400 mb-1" size={24} />
+                            <span className="text-xs text-gray-500">Kliknij, aby zmienić zdjęcie</span>
+                            <input type="file" className="hidden" accept="image/*" onChange={handleEditFileChange} />
+                        </label>
+                    </div>
+                    ) : (
+                    <div className="relative group">
+                        <img src={editFormData.reference_photo_base64} alt="New Preview" className="w-full h-40 object-cover rounded border shadow-sm" />
+                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center rounded">
+                            <span className="text-white text-xs font-bold">Nowe zdjęcie</span>
+                        </div>
+                        <button 
+                            onClick={() => setEditFormData(prev => ({ ...prev, reference_photo_base64: '' }))} 
+                            className="absolute top-1 right-1 bg-red-500 text-white p-1 rounded-full hover:bg-red-600 transition-colors shadow-sm"
+                        >
+                            <X size={14} />
+                        </button>
+                    </div>
+                    )}
+                </div>
+
+                <div className="flex justify-end gap-2 pt-2 border-t">
+                    <button 
+                        onClick={() => setIsEditUserOpen(false)} 
+                        className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded transition"
+                    >
+                        Anuluj
+                    </button>
+                    <button 
+                        onClick={handleSaveEdit} 
+                        className="px-4 py-2 bg-orange-600 text-white rounded hover:bg-orange-700 transition shadow-sm font-medium"
+                    >
+                        Zapisz zmiany
+                    </button>
+                </div>
+            </div>
+        </div>
+      )}
 
       {/* --- REGENERATE QR CONFIRMATION MODAL --- */}
       {regenerateTarget && (
@@ -714,7 +884,8 @@ const AdminPage: React.FC = () => {
                             value={pdfFilters.userId}
                             onChange={(e) => setPdfFilters({...pdfFilters, userId: e.target.value})}
                         >
-                            <option value="all">Wszyscy użytkownicy</option>
+                            <option value="all">Wszyscy użytkownicy (+ Błędne QR)</option>
+                            <option value="invalid_qr">Tylko błędne kody QR</option>
                             {users.map(u => (
                                 <option key={u.id} value={u.id}>{u.full_name} (ID: {u.id})</option>
                             ))}
