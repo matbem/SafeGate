@@ -1,3 +1,4 @@
+<<<<<<< Updated upstream
 CREATE EXTENSION IF NOT EXISTS vector;
 
 CREATE TYPE access_status AS ENUM ('SUCCESS', 'FACE_MISMATCH', 'INVALID_QR', 'NO_FACE', 'TAMPERING_DETECTED');
@@ -37,3 +38,5 @@ CREATE TABLE admins (
 INSERT INTO admins (username, hashed_password) VALUES
 ('admin', '$2b$12$nTdR4lRvtq61hGWiD2PGX.hX81MroW3vP397P/z2Yc4NN56.VqS2O');
 
+=======
+>>>>>>> Stashed changes
