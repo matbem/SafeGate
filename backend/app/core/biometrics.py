@@ -19,7 +19,6 @@ class BiometricsCore:
     def check_image_quality(self, image_rgb: np.ndarray) -> Dict[str, Any]:
         """
         Checks image quality based on blur and brightness.
-        Returns a dictionary with quality metrics.
         """
         logger.debug("Checking image quality")
         gray = cv2.cvtColor(image_rgb, cv2.COLOR_RGB2GRAY)
@@ -80,5 +79,5 @@ class BiometricsCore:
         return {
             "is_match": is_match,
             "distance": distance,
-            "confidence_score": round(confidence, 2) # POPRAWKA: ujednolicona nazwa klucza
+            "confidence_score": round(confidence, 2)
         }

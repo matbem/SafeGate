@@ -35,5 +35,5 @@ CREATE TABLE admins (
 );
 
 INSERT INTO admins (username, hashed_password) VALUES
-('admin', '$2b$12$nTdR4lRvtq61hGWiD2PGX.hX81MroW3vP397P/z2Yc4NN56.VqS2O'); -- Password is 'admin'
+('admin', '$2b$12$nTdR4lRvtq61hGWiD2PGX.hX81MroW3vP397P/z2Yc4NN56.VqS2O');
 

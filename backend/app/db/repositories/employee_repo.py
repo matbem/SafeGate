@@ -11,7 +11,6 @@ class EmployeeRepository:
         Fetches user by QR token. 
         Used in AccessService.verify_entrance.
         """
-        # --- ZABEZPIECZENIE: Jeśli token jest pusty lub None, nie szukaj w bazie ---
         if not qr_token:
             return None
 
@@ -25,7 +24,6 @@ class EmployeeRepository:
         row = result.fetchone()
         
         if row:
-            # Konwersja wiersza na słownik
             return {
                 "id": row.id,
                 "full_name": row.full_name,
@@ -46,14 +44,12 @@ class EmployeeRepository:
             RETURNING id
         """)
         
-        # Przygotowanie parametrów
         params = {
             "full_name": user_data["full_name"],
             "qr_token": user_data["qr_token"],
             "qr_valid_until": user_data["qr_valid_until"],
-            # Konwersja listy floatów na string dla bazy (jeśli wymagane przez sterownik)
             "face_encoding": str(user_data["face_encoding"]), 
-            "ref_photo": user_data.get("reference_photo", "") # Lub reference_photo_base64, zależnie co przychodzi z serwisu
+            "ref_photo": user_data.get("reference_photo", "")
         }
         
         result = await self.session.execute(query, params)
@@ -144,7 +140,6 @@ class EmployeeRepository:
                 "full_name": row.full_name,
                 "qr_token": row.qr_token,
                 "qr_valid_until": row.qr_valid_until,
-                # Mapujemy kolumnę z bazy na nazwę oczekiwaną przez frontend
                 "reference_photo_base64": row.reference_photo 
             })
         

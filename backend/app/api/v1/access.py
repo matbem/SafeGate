@@ -9,8 +9,7 @@ router = APIRouter()
 async def verify_access(data: AccessVerifyRequest,
                         access_service: AccessService = Depends(get_access_service)):
     """
-    Endpoint: Weryfikacja wejścia
-    Opis: Odbiera token QR i klatkę wideo, zwraca decyzję o otwarciu drzwi.
+    Entrance verification
     """
 
     try:
@@ -44,7 +43,7 @@ async def check_qr_validity(
     access_service: AccessService = Depends(get_access_service)
 ):
     """
-    Endpoint: Pre-walidacja kodu QR (bez zdjęć).
+    Preliminary QR token validity check
     """
     result = await access_service.validate_qr_token(data.qr_token)
     return CheckQrResponse(**result)

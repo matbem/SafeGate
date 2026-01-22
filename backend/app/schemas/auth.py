@@ -2,7 +2,6 @@
 from pydantic import BaseModel
 from typing import Optional
 
-# Modele danych na podstawie specyfikacji [cite: 160-174]
 class LoginRequest(BaseModel):
     username: str
     password: str

@@ -129,7 +129,7 @@ class AccessService:
             )
             return {
                 "valid": False, 
-                "message": "Invalid QR code", # Zmieniono na angielski
+                "message": "Invalid QR code",
                 "employee_name": None 
             }
         

@@ -19,7 +19,6 @@ class LogRepository:
         """
         Logs an access attempt with optional captured image (base64).
         """
-        # <--- 2. Dodajemy captured_image do INSERT
         query = text("""
             INSERT INTO access_logs (employee_id, status, confidence, device_ip, captured_image, qr_content)
             VALUES (:employee_id, :status, :confidence, :ip, :captured_image, :qr_content)
@@ -39,7 +38,6 @@ class LogRepository:
         """
         Fetches access log history for a given employee.
         """
-        # <--- 3. Dodajemy captured_image do SELECT
         query = text("""
             SELECT log_id, timestamp, status, confidence, device_ip, captured_image, qr_content
             FROM access_logs 
